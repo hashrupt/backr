@@ -2,12 +2,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { CampaignCard } from "@/components/campaigns/CampaignCard";
 import { Button } from "@/components/ui/button";
-import { CampaignStatus } from "@/types";
 
 async function getFeaturedCampaigns() {
   try {
     const campaigns = await prisma.campaign.findMany({
-      where: { status: CampaignStatus.OPEN },
+      where: { status: "OPEN" },
       orderBy: { currentAmount: "desc" },
       take: 3,
       include: {

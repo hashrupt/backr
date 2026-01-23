@@ -25,11 +25,23 @@ export const UNLOCK_PERIOD_DAYS = 365;
 export const CC_DECIMALS = 18;
 
 // Format CC amount for display
-export function formatCC(amount: bigint | string | number): string {
-  const value =
-    typeof amount === "bigint"
-      ? amount
-      : BigInt(typeof amount === "string" ? amount : Math.floor(amount));
+// Handles bigint, string, number, and Prisma Decimal types
+export function formatCC(amount: bigint | string | number | { toString(): string }): string {
+  let value: bigint;
+  if (typeof amount === "bigint") {
+    value = amount;
+  } else if (typeof amount === "string") {
+    // Handle decimal strings by taking the integer part
+    const intPart = amount.split(".")[0];
+    value = BigInt(intPart || "0");
+  } else if (typeof amount === "number") {
+    value = BigInt(Math.floor(amount));
+  } else {
+    // Prisma Decimal or other object with toString
+    const str = amount.toString();
+    const intPart = str.split(".")[0];
+    value = BigInt(intPart || "0");
+  }
   const divisor = BigInt(10 ** CC_DECIMALS);
   const whole = value / divisor;
   return whole.toLocaleString();

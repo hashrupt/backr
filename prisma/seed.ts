@@ -1,7 +1,18 @@
-import { PrismaClient } from "@prisma/client";
+import { config } from "dotenv";
+config(); // Load environment variables from .env
+
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../src/generated/prisma/client";
 import { hash } from "bcryptjs";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log("Seeding database...");
@@ -15,10 +26,10 @@ async function main() {
     create: {
       email: "alice@example.com",
       name: "Alice Johnson",
-      password: passwordHash,
+      passwordHash: passwordHash,
       partyId: "party::alice::1234567890",
       bio: "DeFi enthusiast and early Canton adopter",
-      mockBalance: "5000000000000000000000000", // 5M CC
+      mockBalance: "5000000", // 5M CC
     },
   });
 
@@ -28,10 +39,10 @@ async function main() {
     create: {
       email: "bob@example.com",
       name: "Bob Smith",
-      password: passwordHash,
+      passwordHash: passwordHash,
       partyId: "party::bob::0987654321",
       bio: "Validator operator and blockchain developer",
-      mockBalance: "10000000000000000000000000", // 10M CC
+      mockBalance: "10000000", // 10M CC
     },
   });
 
@@ -41,10 +52,10 @@ async function main() {
     create: {
       email: "charlie@example.com",
       name: "Charlie Davis",
-      password: passwordHash,
+      passwordHash: passwordHash,
       partyId: "party::charlie::5555555555",
       bio: "Long-term investor looking for quality projects",
-      mockBalance: "2000000000000000000000000", // 2M CC
+      mockBalance: "2000000", // 2M CC
     },
   });
 
@@ -54,9 +65,9 @@ async function main() {
     create: {
       email: "dave@example.com",
       name: "Dave Wilson",
-      password: passwordHash,
+      passwordHash: passwordHash,
       partyId: "party::dave::1111111111",
-      mockBalance: "500000000000000000000000", // 500K CC
+      mockBalance: "500000", // 500K CC
     },
   });
 
@@ -71,6 +82,7 @@ async function main() {
       partyId: "party::coolapp::featured",
       type: "FEATURED_APP",
       description: "Next-generation DeFi application on Canton Network",
+      targetAmount: "10000000", // 10M CC
       claimStatus: "CLAIMED",
       ownerId: alice.id,
       claimedAt: new Date(),
@@ -85,6 +97,7 @@ async function main() {
       partyId: "party::noderunner::validator",
       type: "VALIDATOR",
       description: "Professional validator service with 99.9% uptime",
+      targetAmount: "1000000", // 1M CC
       claimStatus: "CLAIMED",
       ownerId: bob.id,
       claimedAt: new Date(),
@@ -99,6 +112,7 @@ async function main() {
       partyId: "party::newapp::featured",
       type: "FEATURED_APP",
       description: "Innovative trading platform coming soon",
+      targetAmount: "10000000", // 10M CC
       claimStatus: "UNCLAIMED",
     },
   });
@@ -111,6 +125,7 @@ async function main() {
       partyId: "party::superval::validator",
       type: "VALIDATOR",
       description: "Enterprise-grade validation infrastructure",
+      targetAmount: "1000000", // 1M CC
       claimStatus: "UNCLAIMED",
     },
   });
@@ -131,10 +146,10 @@ async function main() {
       entityId: coolApp.id,
       title: "Series A Backing Round",
       description: "We're building the next generation DeFi app on Canton. Looking for long-term backers who believe in our vision. Funds will be used to expand our development team and accelerate feature rollout.",
-      targetAmount: "10000000000000000000000000", // 10M CC
-      currentAmount: "6500000000000000000000000", // 6.5M CC
-      minContribution: "10000000000000000000000", // 10K CC
-      maxContribution: "500000000000000000000000", // 500K CC
+      targetAmount: "10000000", // 10M CC
+      currentAmount: "6500000", // 6.5M CC
+      minContribution: "10000", // 10K CC
+      maxContribution: "500000", // 500K CC
       status: "OPEN",
       startsAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Started 7 days ago
       endsAt: new Date(Date.now() + 23 * 24 * 60 * 60 * 1000), // Ends in 23 days
@@ -149,10 +164,10 @@ async function main() {
       entityId: nodeRunner.id,
       title: "Validator Staking Pool",
       description: "Join our validator staking pool to earn rewards while supporting network security. We offer competitive returns and transparent operations.",
-      targetAmount: "5000000000000000000000000", // 5M CC
-      currentAmount: "4000000000000000000000000", // 4M CC (80%)
-      minContribution: "5000000000000000000000", // 5K CC
-      maxContribution: "1000000000000000000000000", // 1M CC
+      targetAmount: "5000000", // 5M CC
+      currentAmount: "4000000", // 4M CC (80%)
+      minContribution: "5000", // 5K CC
+      maxContribution: "1000000", // 1M CC
       status: "OPEN",
       startsAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), // Started 14 days ago
       endsAt: new Date(Date.now() + 16 * 24 * 60 * 60 * 1000), // Ends in 16 days
@@ -167,10 +182,10 @@ async function main() {
       entityId: coolApp.id,
       title: "Series B Expansion",
       description: "Draft campaign for future expansion round.",
-      targetAmount: "20000000000000000000000000", // 20M CC
+      targetAmount: "20000000", // 20M CC
       currentAmount: "0",
-      minContribution: "50000000000000000000000", // 50K CC
-      maxContribution: "2000000000000000000000000", // 2M CC
+      minContribution: "50000", // 50K CC
+      maxContribution: "2000000", // 2M CC
       status: "DRAFT",
     },
   });
@@ -195,7 +210,7 @@ async function main() {
       userId: bob.id,
       entityId: coolApp.id,
       campaignId: campaign1.id,
-      amount: "500000000000000000000000", // 500K CC
+      amount: "500000", // 500K CC
       status: "LOCKED",
       lockedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     },
@@ -214,7 +229,7 @@ async function main() {
       userId: charlie.id,
       entityId: coolApp.id,
       campaignId: campaign1.id,
-      amount: "250000000000000000000000", // 250K CC
+      amount: "250000", // 250K CC
       status: "LOCKED",
       lockedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
     },
@@ -234,7 +249,7 @@ async function main() {
       userId: alice.id,
       entityId: nodeRunner.id,
       campaignId: campaign2.id,
-      amount: "1000000000000000000000000", // 1M CC
+      amount: "1000000", // 1M CC
       status: "LOCKED",
       lockedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
     },
@@ -254,7 +269,7 @@ async function main() {
     create: {
       userId: dave.id,
       campaignId: campaign1.id,
-      pledgeAmount: "100000000000000000000000", // 100K CC
+      pledgeAmount: "100000", // 100K CC
       message: "I believe in DeFi and want to support innovative projects on Canton!",
       status: "PENDING",
     },
@@ -271,7 +286,7 @@ async function main() {
     create: {
       userId: charlie.id,
       campaignId: campaign2.id,
-      pledgeAmount: "200000000000000000000000", // 200K CC
+      pledgeAmount: "200000", // 200K CC
       message: "Looking to diversify my staking portfolio with quality validators.",
       status: "PENDING",
     },
@@ -289,7 +304,7 @@ async function main() {
     create: {
       userId: dave.id,
       campaignId: campaign2.id,
-      pledgeAmount: "50000000000000000000000", // 50K CC
+      pledgeAmount: "50000", // 50K CC
       message: "Interested in supporting validator infrastructure.",
       status: "ACCEPTED",
     },
@@ -307,7 +322,7 @@ async function main() {
       senderId: alice.id,
       recipientId: dave.id,
       message: "Hi Dave! We'd love to have you as a backer for CoolApp. Your support would mean a lot!",
-      suggestedAmount: "100000000000000000000000", // 100K CC
+      suggestedAmount: "100000", // 100K CC
       status: "PENDING",
     },
   });

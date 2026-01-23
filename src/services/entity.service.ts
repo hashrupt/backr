@@ -134,3 +134,22 @@ export async function updateEntityCurrentAmount(entityId: string) {
     },
   });
 }
+
+export interface UpdateEntityInput {
+  name?: string;
+  description?: string | null;
+  website?: string | null;
+  logoUrl?: string | null;
+}
+
+export async function updateEntity(entityId: string, data: UpdateEntityInput) {
+  return prisma.entity.update({
+    where: { id: entityId },
+    data,
+    include: {
+      owner: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+}

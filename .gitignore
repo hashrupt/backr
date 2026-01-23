@@ -46,3 +46,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Crawler data backups (keep structure with .gitkeep)
+/data/*
+!/data/.gitkeep

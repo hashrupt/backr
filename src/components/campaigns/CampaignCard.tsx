@@ -4,7 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { formatCC } from "@/lib/constants";
-import { EntityType, CampaignStatus } from "@/types";
+
+// Use string literal types to avoid Prisma import issues
+type EntityType = "FEATURED_APP" | "VALIDATOR";
+type CampaignStatus = "DRAFT" | "OPEN" | "SELECTING" | "FUNDED" | "CLOSED" | "CANCELLED";
 
 interface CampaignCardProps {
   campaign: {
@@ -69,7 +72,7 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
             <div>
               <h3 className="font-semibold">{campaign.entity.name}</h3>
               <p className="text-sm text-muted-foreground">
-                {campaign.entity.type === EntityType.FEATURED_APP
+                {campaign.entity.type === "FEATURED_APP"
                   ? "Featured App"
                   : "Validator"}
               </p>
@@ -77,7 +80,7 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
           </div>
           <Badge
             variant={
-              campaign.status === CampaignStatus.OPEN ? "success" : "secondary"
+              campaign.status === "OPEN" ? "success" : "secondary"
             }
           >
             {campaign.status}

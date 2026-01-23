@@ -23,6 +23,12 @@ export function Header() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:space-x-6">
             <Link
+              href="/entities"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Featured Apps
+            </Link>
+            <Link
               href="/campaigns"
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
             >
@@ -146,6 +152,12 @@ export function Header() {
         {mobileMenuOpen && (
           <div className="md:hidden pb-4">
             <div className="space-y-1 pt-2">
+              <Link
+                href="/entities"
+                className="block px-3 py-2 text-base font-medium text-muted-foreground hover:bg-muted hover:text-foreground rounded-md"
+              >
+                Featured Apps
+              </Link>
               <Link
                 href="/campaigns"
                 className="block px-3 py-2 text-base font-medium text-muted-foreground hover:bg-muted hover:text-foreground rounded-md"

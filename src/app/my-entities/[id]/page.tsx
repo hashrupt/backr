@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+// import { CollaborationSuggestions } from "@/components/entities/CollaborationSuggestions";
 import { formatCC } from "@/lib/constants";
 import { EntityType, CampaignStatus } from "@/types";
 
@@ -102,7 +103,12 @@ export default async function EntityPage({ params }: EntityPageProps) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <Link href={`/my-entities/${entity.id}/edit`}>
+                <Button variant="outline" size="sm">
+                  Edit Profile
+                </Button>
+              </Link>
               <Badge
                 variant={
                   entity.activeStatus === "ACTIVE" ? "success" : "secondary"
@@ -136,7 +142,7 @@ export default async function EntityPage({ params }: EntityPageProps) {
       </div>
 
       {entity.campaigns.length === 0 ? (
-        <Card>
+        <Card className="mb-8">
           <CardContent className="py-12 text-center">
             <h3 className="text-lg font-medium">No campaigns yet</h3>
             <p className="text-muted-foreground mt-1">
@@ -148,7 +154,7 @@ export default async function EntityPage({ params }: EntityPageProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 mb-8">
           {entity.campaigns.map((campaign) => {
             const campaignTarget = Number(campaign.targetAmount);
             const campaignCurrent = Number(campaign.currentAmount);
@@ -208,6 +214,9 @@ export default async function EntityPage({ params }: EntityPageProps) {
           })}
         </div>
       )}
+
+      {/* Collaboration Suggestions - temporarily disabled */}
+      {/* <CollaborationSuggestions entityId={entity.id} /> */}
     </div>
   );
 }
