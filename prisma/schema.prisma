@@ -1,0 +1,270 @@
+// Backr - Crowdsourced Staking Platform for Canton Network
+// Database Schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum EntityType {
+  FEATURED_APP
+  VALIDATOR
+}
+
+enum ClaimStatus {
+  UNCLAIMED       // Imported but not yet claimed
+  PENDING_CLAIM   // Claim initiated, awaiting verification
+  CLAIMED         // Verified and claimed by owner
+  SELF_REGISTERED // Created directly by owner (not imported)
+}
+
+enum ImportSource {
+  CANTON_SCANNER  // Imported from Canton scanner API
+  TOKENOMICS_CSV  // Imported from Tokenomics group CSV
+  MANUAL          // Manually added by admin
+}
+
+enum FoundationStatus {
+  PENDING     // Awaiting Foundation review
+  APPROVED    // In good standing
+  SUSPENDED   // Compliance issue
+  REJECTED    // Not approved
+}
+
+enum ActiveStatus {
+  INACTIVE        // Below requirements or not approved
+  GRACE_PERIOD    // Backing dropped, within grace period
+  ACTIVE          // Fully compliant Featured App or Validator
+  PAUSED          // Voluntarily paused
+}
+
+enum CampaignStatus {
+  DRAFT           // Not yet published
+  OPEN            // Accepting interests
+  SELECTING       // Owner reviewing/selecting backers
+  FUNDED          // Target reached, no more contributions
+  CLOSED          // Campaign ended (deadline or manual)
+  CANCELLED       // Cancelled by owner
+}
+
+enum InterestStatus {
+  PENDING         // Awaiting owner review
+  ACCEPTED        // Owner accepted, user can pledge
+  DECLINED        // Owner declined
+  WITHDRAWN       // User withdrew interest
+  CONVERTED       // User completed pledge (became Backing)
+}
+
+enum InviteStatus {
+  PENDING         // Awaiting recipient response
+  ACCEPTED        // Recipient accepted, can pledge
+  DECLINED        // Recipient declined
+  EXPIRED         // Invite expired
+  CONVERTED       // Recipient completed pledge (became Backing)
+}
+
+enum BackingStatus {
+  PLEDGED     // Intent to back (off-chain)
+  LOCKED      // CC locked in segregated PartyId
+  UNLOCKING   // 365-day unlock initiated
+  WITHDRAWN   // Fully withdrawn
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  bio           String?   // Brief intro for interest registrations
+  partyId       String?   @unique  // Canton PartyId
+  walletAddress String?   @unique
+
+  // Simulated CC balance for Web2 MVP
+  mockBalance   Decimal   @default(1000000) @db.Decimal(36, 18)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  backings        Backing[]
+  ownedEntities   Entity[]         @relation("EntityOwner")
+  interests       Interest[]
+  sentInvites     CampaignInvite[] @relation("InviteSender")
+  receivedInvites CampaignInvite[] @relation("InviteRecipient")
+}
+
+model Entity {
+  id              String        @id @default(cuid())
+  type            EntityType    // FEATURED_APP or VALIDATOR
+  name            String
+  description     String?
+  partyId         String        @unique  // Canton PartyId
+  website         String?
+  logoUrl         String?
+
+  // Bonding status
+  targetAmount    Decimal       @db.Decimal(36, 18)  // Required CC (10M for apps, 1M for validators)
+  currentAmount   Decimal       @default(0) @db.Decimal(36, 18)
+
+  // CIP compliance
+  foundationStatus FoundationStatus @default(PENDING)
+  activeStatus     ActiveStatus     @default(INACTIVE)
+
+  // Grace period tracking
+  gracePeriodEnds DateTime?
+  gracePeriodDays Int           @default(7)  // 7 for apps, 30 for validators
+
+  // Ownership & Claim Status
+  claimStatus     ClaimStatus   @default(UNCLAIMED)
+  ownerId         String?
+  owner           User?         @relation("EntityOwner", fields: [ownerId], references: [id])
+  claimedAt       DateTime?
+
+  // Import tracking
+  importSource    ImportSource?
+  importedAt      DateTime?
+  externalId      String?       // ID from scanner/external source
+
+  // Timestamps
+  activatedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  backings        Backing[]
+  campaigns       Campaign[]
+
+  @@index([type])
+  @@index([claimStatus])
+  @@index([activeStatus])
+}
+
+model Campaign {
+  id              String          @id @default(cuid())
+  entityId        String
+  entity          Entity          @relation(fields: [entityId], references: [id])
+
+  // Campaign details
+  title           String
+  description     String?
+  targetAmount    Decimal         @db.Decimal(36, 18)  // CC goal for this campaign
+  currentAmount   Decimal         @default(0) @db.Decimal(36, 18)
+  minContribution Decimal?        @db.Decimal(36, 18)  // Minimum per backer
+  maxContribution Decimal?        @db.Decimal(36, 18)  // Maximum per backer
+  terms           String?         // Terms and conditions
+
+  // Timeline
+  startsAt        DateTime        @default(now())
+  endsAt          DateTime?       // Campaign deadline
+  status          CampaignStatus  @default(DRAFT)
+
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  interests       Interest[]
+  invites         CampaignInvite[]
+  backings        Backing[]
+
+  @@index([status])
+  @@index([entityId])
+}
+
+model Interest {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  campaignId      String
+  campaign        Campaign        @relation(fields: [campaignId], references: [id])
+
+  // Interest details
+  pledgeAmount    Decimal         @db.Decimal(36, 18)  // Intended contribution
+  message         String?         // Why they want to back
+
+  // Selection status
+  status          InterestStatus  @default(PENDING)
+  reviewedAt      DateTime?
+  reviewNote      String?         // Owner's note (internal)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([userId, campaignId])
+  @@index([status])
+  @@index([campaignId])
+}
+
+model CampaignInvite {
+  id              String          @id @default(cuid())
+  campaignId      String
+  campaign        Campaign        @relation(fields: [campaignId], references: [id])
+
+  // Sender (entity owner)
+  senderId        String
+  sender          User            @relation("InviteSender", fields: [senderId], references: [id])
+
+  // Recipient (can be existing user or email for new user)
+  recipientId     String?
+  recipient       User?           @relation("InviteRecipient", fields: [recipientId], references: [id])
+  recipientEmail  String?         // For inviting non-users
+  recipientPartyId String?        // For inviting by PartyId
+
+  // Invite details
+  message         String?         // Personal message from owner
+  suggestedAmount Decimal?        @db.Decimal(36, 18)  // Suggested contribution
+
+  // Status
+  status          InviteStatus    @default(PENDING)
+  respondedAt     DateTime?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([campaignId, recipientEmail])
+  @@unique([campaignId, recipientId])
+  @@index([status])
+  @@index([campaignId])
+}
+
+model Backing {
+  id          String        @id @default(cuid())
+  amount      Decimal       @db.Decimal(36, 18)
+
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  entityId    String
+  entity      Entity        @relation(fields: [entityId], references: [id])
+  campaignId  String?       // Optional: backing via campaign
+  campaign    Campaign?     @relation(fields: [campaignId], references: [id])
+
+  // Canton tracking (mocked in MVP)
+  txHash      String?
+  lockedPartyId String?     // Segregated PartyId holding the CC
+
+  status      BackingStatus @default(PLEDGED)
+  lockedAt    DateTime?
+  unlockRequestedAt DateTime?
+  unlockEffectiveAt DateTime?  // 365 days after unlock request
+  unlockedAt  DateTime?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([userId, entityId, campaignId])
+  @@index([status])
+  @@index([entityId])
+  @@index([userId])
+}

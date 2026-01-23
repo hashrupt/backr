@@ -272,6 +272,58 @@ Once an entity is claimed/validated, owners can run **backing campaigns** to rai
 
 ---
 
+## Architecture
+
+### Web2-First Approach
+
+The MVP uses a **Web2-first architecture** to validate UI/UX before blockchain integration. All Canton/Daml operations are mocked, allowing rapid iteration on the product experience.
+
+| Layer | MVP (Web2) | Future (Daml) |
+|-------|------------|---------------|
+| User Auth | NextAuth + PostgreSQL | Same |
+| Entity Registry | PostgreSQL | Same (metadata only) |
+| CC Balances | Simulated `mockBalance` field | Canton Ledger |
+| Backing/Locking | Tracked in DB | `StakingPool` contract |
+| Unlock Process | Simulated countdown | `UnlockRequest` contract |
+
+### Future Daml Integration Points
+
+These services are mocked in MVP (`src/services/canton/mock.ts`) and will be replaced with real Canton integration:
+
+| Function | Current (Mock) | Future (Daml) |
+|----------|----------------|---------------|
+| `validatePartyId()` | Always returns true | Query Canton ledger |
+| `getPartyBalance()` | Returns mock balance | Query real CC balance |
+| `verifyOwnership()` | Compares partyIds | Submit ClaimVerification contract |
+| `lockCC()` | Updates DB only | Create BackingRight contract |
+| `requestUnlock()` | Simulates countdown | Exercise UnlockRequest choice |
+| `withdrawCC()` | Updates DB only | Archive contract after 365 days |
+
+### Future Daml Contracts (Post-MVP)
+
+```daml
+-- StakingPool: Holds locked CC for an entity
+template StakingPool
+  entityPartyId : Party
+  totalLocked   : Decimal
+  isActive      : Bool
+
+-- BackingRight: Backer's claim to locked CC
+template BackingRight
+  backer        : Party
+  entityPartyId : Party
+  amount        : Decimal
+  lockedAt      : Time
+
+-- UnlockRequest: 365-day unlock countdown
+template UnlockRequest
+  backing       : ContractId BackingRight
+  requestedAt   : Time
+  effectiveAt   : Time
+```
+
+---
+
 ## Project Structure
 
 ```
