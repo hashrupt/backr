@@ -29,6 +29,7 @@ enum ClaimStatus {
 enum ImportSource {
   CANTON_SCANNER  // Imported from Canton scanner API
   TOKENOMICS_CSV  // Imported from Tokenomics group CSV
+  CCVIEW          // Imported from ccview.io
   MANUAL          // Manually added by admin
 }
 
@@ -136,6 +137,11 @@ model Entity {
   importSource    ImportSource?
   importedAt      DateTime?
   externalId      String?       // ID from scanner/external source
+  applicationData Json?         // Full FA application form data from tokenomics
+
+  // Auto-generated tags/categories
+  category        String?       // Primary category (DeFi, Infrastructure, RWA, etc.)
+  tags            String[]      // Additional tags for filtering
 
   // Timestamps
   activatedAt     DateTime?

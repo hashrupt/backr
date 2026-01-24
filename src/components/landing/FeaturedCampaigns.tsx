@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 async function getFeaturedCampaigns() {
   try {
     const campaigns = await prisma.campaign.findMany({
-      where: { status: "OPEN" },
+      where: {
+        status: "OPEN",
+        entity: { type: "FEATURED_APP" },
+      },
       orderBy: { currentAmount: "desc" },
       take: 3,
       include: {
@@ -48,7 +51,7 @@ export async function FeaturedCampaigns() {
           <div>
             <h2 className="text-3xl font-bold">Featured Campaigns</h2>
             <p className="mt-1 text-muted-foreground">
-              Top campaigns seeking backing
+              Top campaigns seeking funding
             </p>
           </div>
           <Link href="/campaigns">

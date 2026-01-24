@@ -1,25 +1,38 @@
 import { prisma } from "@/lib/db";
 import { EntityCard } from "@/components/entities/EntityCard";
 
-// Use string literal type to avoid Prisma import issues
-type EntityType = "FEATURED_APP" | "VALIDATOR";
+// Category colors for filter buttons
+const categoryColors: Record<string, string> = {
+  'DeFi': 'bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-100',
+  'RWA': 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-100',
+  'Data': 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200 dark:bg-cyan-900 dark:text-cyan-100',
+  'Identity': 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-100',
+  'Gaming': 'bg-pink-100 text-pink-800 hover:bg-pink-200 dark:bg-pink-900 dark:text-pink-100',
+  'Other': 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100',
+};
+
+const categories = ['DeFi', 'RWA', 'Data', 'Identity', 'Gaming', 'Other'];
 
 interface EntitiesPageProps {
   searchParams: Promise<{
-    type?: string;
     page?: string;
     q?: string;
+    category?: string;
   }>;
 }
 
-async function getEntities(params: { type?: string; page?: string; q?: string }) {
+async function getEntities(params: { page?: string; q?: string; category?: string }) {
   const page = parseInt(params.page || "1", 10);
   const limit = 12;
 
-  const where: Record<string, unknown> = {};
+  // Only show Featured Apps
+  const where: Record<string, unknown> = {
+    type: "FEATURED_APP",
+  };
 
-  if (params.type && params.type !== "all") {
-    where.type = params.type as EntityType;
+  // Category filter
+  if (params.category && params.category !== "all") {
+    where.category = params.category;
   }
 
   // Search filter - search by name, description, or partyId
@@ -46,6 +59,8 @@ async function getEntities(params: { type?: string; page?: string; q?: string })
         description: true,
         logoUrl: true,
         website: true,
+        externalId: true,
+        category: true,
         claimStatus: true,
         activeStatus: true,
         owner: {
@@ -62,6 +77,19 @@ async function getEntities(params: { type?: string; page?: string; q?: string })
   return { entities, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
+// Helper to build URL with current filters
+function buildUrl(params: Record<string, string | undefined>, overrides: Record<string, string | undefined>) {
+  const merged = { ...params, ...overrides };
+  const searchParams = new URLSearchParams();
+
+  if (merged.category && merged.category !== "all") searchParams.set("category", merged.category);
+  if (merged.q) searchParams.set("q", merged.q);
+  if (merged.page && merged.page !== "1") searchParams.set("page", merged.page);
+
+  const qs = searchParams.toString();
+  return `/entities${qs ? `?${qs}` : ""}`;
+}
+
 export default async function EntitiesPage({ searchParams }: EntitiesPageProps) {
   const params = await searchParams;
   const { entities, total, page, totalPages } = await getEntities(params);
@@ -69,17 +97,17 @@ export default async function EntitiesPage({ searchParams }: EntitiesPageProps) 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Featured Apps & Validators</h1>
+        <h1 className="text-3xl font-bold">Featured Apps</h1>
         <p className="text-muted-foreground mt-1">
-          Browse all {total} registered entities on Canton Network
+          Browse all {total} Featured Apps on Canton Network
         </p>
       </div>
 
       {/* Search */}
       <form method="GET" action="/entities" className="mb-6">
-        {/* Preserve type filter */}
-        {params.type && params.type !== "all" && (
-          <input type="hidden" name="type" value={params.type} />
+        {/* Preserve filters */}
+        {params.category && params.category !== "all" && (
+          <input type="hidden" name="category" value={params.category} />
         )}
         <div className="flex gap-2 max-w-md">
           <input
@@ -97,7 +125,7 @@ export default async function EntitiesPage({ searchParams }: EntitiesPageProps) 
           </button>
           {params.q && (
             <a
-              href={`/entities${params.type ? `?type=${params.type}` : ""}`}
+              href={buildUrl(params, { q: undefined, page: undefined })}
               className="px-4 py-2 rounded-md bg-muted text-sm font-medium hover:bg-muted/80"
             >
               Clear
@@ -106,39 +134,56 @@ export default async function EntitiesPage({ searchParams }: EntitiesPageProps) 
         </div>
       </form>
 
-      {/* Filters */}
-      <div className="mb-6 flex flex-wrap gap-4">
+      {/* Category Filters */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        <span className="text-sm text-muted-foreground py-2 mr-2">Category:</span>
         <a
-          href={`/entities${params.q ? `?q=${encodeURIComponent(params.q)}` : ""}`}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            !params.type || params.type === "all"
+          href={buildUrl(params, { category: undefined, page: undefined })}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            !params.category || params.category === "all"
               ? "bg-primary text-primary-foreground"
               : "bg-muted hover:bg-muted/80"
           }`}
         >
           All
         </a>
-        <a
-          href={`/entities?type=FEATURED_APP${params.q ? `&q=${encodeURIComponent(params.q)}` : ""}`}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            params.type === "FEATURED_APP"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted hover:bg-muted/80"
-          }`}
-        >
-          Featured Apps
-        </a>
-        <a
-          href={`/entities?type=VALIDATOR${params.q ? `&q=${encodeURIComponent(params.q)}` : ""}`}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            params.type === "VALIDATOR"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted hover:bg-muted/80"
-          }`}
-        >
-          Validators
-        </a>
+        {categories.map((cat) => (
+          <a
+            key={cat}
+            href={buildUrl(params, { category: cat, page: undefined })}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              params.category === cat
+                ? "ring-2 ring-offset-2 ring-primary " + categoryColors[cat]
+                : categoryColors[cat]
+            }`}
+          >
+            {cat}
+          </a>
+        ))}
       </div>
+
+      {/* Active filters summary */}
+      {(params.category || params.q) && (
+        <div className="mb-4 flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Filters:</span>
+          {params.category && params.category !== "all" && (
+            <span className={`px-2 py-1 rounded text-xs ${categoryColors[params.category] || 'bg-muted'}`}>
+              {params.category}
+            </span>
+          )}
+          {params.q && (
+            <span className="px-2 py-1 bg-muted rounded text-xs">
+              &quot;{params.q}&quot;
+            </span>
+          )}
+          <a
+            href="/entities"
+            className="text-primary hover:underline text-xs ml-2"
+          >
+            Clear all
+          </a>
+        </div>
+      )}
 
       {/* Entity Grid */}
       {entities.length === 0 ? (
@@ -163,7 +208,7 @@ export default async function EntitiesPage({ searchParams }: EntitiesPageProps) 
         <div className="mt-8 flex justify-center gap-2">
           {page > 1 && (
             <a
-              href={`/entities?page=${page - 1}${params.type ? `&type=${params.type}` : ""}${params.q ? `&q=${encodeURIComponent(params.q)}` : ""}`}
+              href={buildUrl(params, { page: String(page - 1) })}
               className="px-4 py-2 rounded-md bg-muted hover:bg-muted/80 text-sm font-medium"
             >
               Previous
@@ -174,7 +219,7 @@ export default async function EntitiesPage({ searchParams }: EntitiesPageProps) 
           </span>
           {page < totalPages && (
             <a
-              href={`/entities?page=${page + 1}${params.type ? `&type=${params.type}` : ""}${params.q ? `&q=${encodeURIComponent(params.q)}` : ""}`}
+              href={buildUrl(params, { page: String(page + 1) })}
               className="px-4 py-2 rounded-md bg-muted hover:bg-muted/80 text-sm font-medium"
             >
               Next

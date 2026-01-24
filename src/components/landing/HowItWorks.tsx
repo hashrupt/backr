@@ -1,15 +1,15 @@
 const steps = [
   {
     number: 1,
-    title: "Claim Entity",
+    title: "Claim Your App",
     description:
-      "If you operate a Featured App or Validator on Canton, claim your entity to start raising backing.",
+      "If you operate a Featured App on Canton Network, claim your entity to start raising funds.",
   },
   {
     number: 2,
     title: "Create Campaign",
     description:
-      "Set your target amount, contribution limits, and terms. Publish to start accepting interest.",
+      "Set your funding goals, contribution limits, and terms. Publish to start accepting interest.",
   },
   {
     number: 3,
@@ -19,9 +19,9 @@ const steps = [
   },
   {
     number: 4,
-    title: "Get Backed",
+    title: "Get Funded",
     description:
-      "Accepted backers lock their CC to help you meet CIP requirements. Everyone benefits.",
+      "Accepted backers contribute CC to fund your project. Meet staking requirements and grow together.",
   },
 ];
 
@@ -32,7 +32,7 @@ export function HowItWorks() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold">How It Works</h2>
           <p className="mt-2 text-muted-foreground">
-            Four simple steps to crowdsourced staking
+            Four simple steps to crowdsourced funding
           </p>
         </div>
         <div className="grid gap-8 md:grid-cols-4">

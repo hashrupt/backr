@@ -17,33 +17,46 @@ interface TokenomicsApplication {
   topicTitle: string;
   topicUrl: string;  // Direct link to the application page
 
+  // === FORM FIELDS (Official FA Application) ===
   // Organization details
-  organizationName?: string;
-  applicationName?: string;
-  website?: string;
+  institutionName?: string;           // Name of Applying Institution
+  applicationName?: string;           // Name of the application
+  institutionUrl?: string;            // URL of the applying institution
+  responsibleEmails?: string[];       // Emails for Responsible Persons
+  partyId?: string;                   // Party ID for the Featured Application
+  codeRepository?: string;            // URL for the public code repository
 
-  // Submission info
+  // Application details
+  applicationSummary?: string;        // Summary of what application will do
+  expectedUsers?: string;             // Describe the expected users
+  ledgerInteraction?: string;         // How application will interact with ledger
+  rewardActivities?: string;          // Activities that earn application rewards
+  usesCantonCoinOrMarkers?: string;   // Does activity use CC or Activity Markers?
+
+  // Transaction details
+  dailyTransactionsPerUser?: string;  // Expected daily transactions per user
+  multipleTransactionConditions?: string; // Conditions for multiple transactions per round
+  transactionScaling?: string;        // How transactions scale (Linear/Super Linear/Sub Linear)
+
+  // Timeline
+  mainnetLaunchDate?: string;         // Anticipated launch date on MainNet
+  firstCustomers?: string;            // First customers and go-live dates
+
+  // Business impact
+  noFAStatusImpact?: string;          // How would not having FA status change plans?
+  bonafideControls?: string;          // Controls to prevent non-bona fide transactions
+  additionalNotes?: string;           // Additional Notes for Committee
+
+  // === LEGACY/DERIVED FIELDS ===
+  organizationName?: string;          // Alias for institutionName
+  website?: string;                   // Alias for institutionUrl
   submissionDate?: string;
   entryId?: string;
-
-  // Contact
-  contactEmails?: string[];
-
-  // Technical details
-  partyId?: string;
-  codeRepository?: string;
-  mainnetLaunchDate?: string;
-
-  // Descriptions
+  contactEmails?: string[];           // Alias for responsibleEmails
   organizationBackground?: string;
-  applicationSummary?: string;
-  targetUsers?: string;
-  rewardMechanism?: string;
-
-  // Documentation
+  targetUsers?: string;               // Alias for expectedUsers
+  rewardMechanism?: string;           // Alias for rewardActivities
   documentationUrls?: string[];
-
-  // Legacy fields for compatibility
   applicantName?: string;
   description?: string;
 }
@@ -227,6 +240,13 @@ function extractCleanPartyId(text: string): string | null {
  * Stops at TLD boundary, removing trailing text.
  */
 function extractCleanWebsite(text: string): string | null {
+  // Filter out garbage text that's not a URL (cookie banners, etc.)
+  const garbagePatterns = ['cookies', 'agree', 'consent', 'privacy policy', 'learn more'];
+  const lowerText = text.toLowerCase();
+  if (garbagePatterns.some(p => lowerText.includes(p) && !lowerText.includes('http'))) {
+    return null;
+  }
+
   // Match URL up to and including TLD, then stop at common boundaries
   const websiteRegex = /https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.(com|io|org|net|app|xyz|co|ai|dev)(?:\/[^\s<>"]*)?/gi;
   const matches = text.match(websiteRegex);
@@ -237,6 +257,10 @@ function extractCleanWebsite(text: string): string | null {
     url = url.replace(/[.,;:!?'")\]}>]+$/, '');
     // Remove common trailing words that got captured
     url = url.replace(/(Emails|Product|Summary|Name|Background|Company|Description).*$/i, '');
+    // Final validation - reject if it doesn't look like a valid URL
+    if (!url.startsWith('http') || url.length < 10) {
+      return null;
+    }
     return url;
   }
   return null;
@@ -384,6 +408,7 @@ async function extractTopicDetails(page: Page, topic: TokenomicsApplication): Pr
     // Extract applicant/organization name from topic title
     topic.applicantName = extractApplicantFromTitle(topic.topicTitle) || undefined;
     topic.organizationName = topic.applicantName;
+    topic.institutionName = topic.applicantName;
     if (topic.organizationName) {
       console.log(`Organization Name: ${topic.organizationName}`);
     }
@@ -394,22 +419,22 @@ async function extractTopicDetails(page: Page, topic: TokenomicsApplication): Pr
     if (messageContent) {
       console.log("Raw content length:", messageContent.length);
 
-      // === PARTY ID ===
-      const partyId = extractCleanPartyId(messageContent);
-      if (partyId) {
-        topic.partyId = partyId;
-        console.log(`Party ID: ${topic.partyId}`);
+      // === 1. NAME OF APPLYING INSTITUTION ===
+      const institutionName = extractFieldByLabel(messageContent, [
+        'Name of Applying Institution',
+        'Name of the Applying Institution',
+        'Applying Institution',
+        'Institution Name'
+      ]);
+      if (institutionName) {
+        topic.institutionName = institutionName;
+        topic.organizationName = institutionName;
+        console.log(`Institution Name: ${topic.institutionName}`);
       }
 
-      // === WEBSITE ===
-      const website = extractCleanWebsite(messageContent);
-      if (website) {
-        topic.website = website;
-        console.log(`Website: ${topic.website}`);
-      }
-
-      // === APPLICATION NAME ===
+      // === 2. NAME OF THE APPLICATION ===
       const appName = extractFieldByLabel(messageContent, [
+        'Name of the application',
         'Application Name',
         'Name of Application',
         'Product Name',
@@ -420,38 +445,224 @@ async function extractTopicDetails(page: Page, topic: TokenomicsApplication): Pr
         console.log(`Application Name: ${topic.applicationName}`);
       }
 
-      // === SUBMISSION DATE ===
-      const submissionDate = extractDate(messageContent);
-      if (submissionDate) {
-        topic.submissionDate = submissionDate;
-        console.log(`Submission Date: ${topic.submissionDate}`);
+      // === 3. URL OF THE APPLYING INSTITUTION ===
+      const institutionUrl = extractFieldByLabel(messageContent, [
+        'URL of the applying institution',
+        'Institution URL',
+        'Company URL',
+        'Organization URL',
+        'Website'
+      ]);
+      if (institutionUrl) {
+        topic.institutionUrl = extractCleanWebsite(institutionUrl) || institutionUrl;
+        topic.website = topic.institutionUrl;
+        console.log(`Institution URL: ${topic.institutionUrl}`);
+      } else {
+        // Fallback: extract any website
+        const website = extractCleanWebsite(messageContent);
+        if (website) {
+          topic.website = website;
+          topic.institutionUrl = website;
+          console.log(`Website: ${topic.website}`);
+        }
       }
 
-      // === CONTACT EMAILS ===
+      // === 4. EMAILS FOR RESPONSIBLE PERSONS ===
       const emails = extractEmails(messageContent);
       if (emails.length > 0) {
+        topic.responsibleEmails = emails;
         topic.contactEmails = emails;
-        console.log(`Contact Emails: ${emails.join(', ')}`);
+        console.log(`Responsible Emails: ${emails.join(', ')}`);
       }
 
-      // === CODE REPOSITORY ===
+      // === 5. PARTY ID FOR THE FEATURED APPLICATION ===
+      const partyId = extractCleanPartyId(messageContent);
+      if (partyId) {
+        topic.partyId = partyId;
+        console.log(`Party ID: ${topic.partyId}`);
+      }
+
+      // === 6. URL FOR PUBLIC CODE REPOSITORY ===
       const repoMatch = messageContent.match(/(?:repository|github|code)[:\s]*(https?:\/\/github\.com[^\s<>"]+|N\/A|proprietary|private)/i);
       if (repoMatch) {
         let repo = repoMatch[1].trim();
-        // Clean up GitHub URLs - remove trailing artifacts after .md
         repo = repo.replace(/\.md[A-Z].*$/i, '.md');
         topic.codeRepository = repo;
         console.log(`Code Repository: ${topic.codeRepository}`);
       }
 
-      // === MAINNET LAUNCH DATE ===
-      const launchMatch = messageContent.match(/(?:MainNet|Launch|Go.?Live)[:\s]*(?:Date)?[:\s]*([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{4}-\d{2}-\d{2})/i);
-      if (launchMatch) {
-        topic.mainnetLaunchDate = launchMatch[1].trim();
-        console.log(`MainNet Launch Date: ${topic.mainnetLaunchDate}`);
+      // === 7. SUMMARY OF WHAT APPLICATION WILL DO ===
+      const appSummary = extractFieldByLabel(messageContent, [
+        'Provide a summary of what your application will do',
+        'summary of what your application will do',
+        'Application Summary',
+        'Summary of Application',
+        'What does the application do',
+        'Product Summary'
+      ]);
+      if (appSummary) {
+        topic.applicationSummary = appSummary.slice(0, 2000);
+        console.log(`Application Summary: ${topic.applicationSummary.slice(0, 100)}...`);
       }
 
-      // === ORGANIZATION BACKGROUND ===
+      // === 8. EXPECTED USERS ===
+      const expectedUsers = extractFieldByLabel(messageContent, [
+        'Describe the expected users of your application',
+        'expected users of your application',
+        'Expected Users',
+        'Target Users',
+        'Who are the target users',
+        'Intended Users'
+      ]);
+      if (expectedUsers) {
+        topic.expectedUsers = expectedUsers.slice(0, 1000);
+        topic.targetUsers = topic.expectedUsers;
+        console.log(`Expected Users: ${topic.expectedUsers.slice(0, 100)}...`);
+      }
+
+      // === 9. LEDGER INTERACTION ===
+      const ledgerInteraction = extractFieldByLabel(messageContent, [
+        'Describe how your application will interact with the ledger',
+        'how your application will interact with the ledger',
+        'Ledger Interaction',
+        'interact with the ledger'
+      ]);
+      if (ledgerInteraction) {
+        topic.ledgerInteraction = ledgerInteraction.slice(0, 1000);
+        console.log(`Ledger Interaction: ${topic.ledgerInteraction.slice(0, 100)}...`);
+      }
+
+      // === 10. REWARD ACTIVITIES ===
+      const rewardActivities = extractFieldByLabel(messageContent, [
+        'Describe the activities that your application will earn application rewards from',
+        'activities that your application will earn application rewards from',
+        'activities that earn application rewards',
+        'Reward Activities',
+        'earn application rewards'
+      ]);
+      if (rewardActivities) {
+        topic.rewardActivities = rewardActivities.slice(0, 1000);
+        topic.rewardMechanism = topic.rewardActivities;
+        console.log(`Reward Activities: ${topic.rewardActivities.slice(0, 100)}...`);
+      }
+
+      // === 11. USES CANTON COIN OR ACTIVITY MARKERS ===
+      const usesCC = extractFieldByLabel(messageContent, [
+        'Does this activity use Canton Coin or Activity Markers to generate rewards',
+        'use Canton Coin or Activity Markers',
+        'Canton Coin or Activity Markers',
+        'CC or Activity Markers'
+      ]);
+      if (usesCC) {
+        topic.usesCantonCoinOrMarkers = usesCC.slice(0, 500);
+        console.log(`Uses CC/Markers: ${topic.usesCantonCoinOrMarkers.slice(0, 100)}...`);
+      }
+
+      // === 12. DAILY TRANSACTIONS PER USER ===
+      const dailyTx = extractFieldByLabel(messageContent, [
+        'On a per user basis, what is your expected daily number of transactions',
+        'expected daily number of transactions',
+        'daily number of transactions',
+        'Daily Transactions'
+      ]);
+      if (dailyTx) {
+        topic.dailyTransactionsPerUser = dailyTx.slice(0, 500);
+        console.log(`Daily Tx Per User: ${topic.dailyTransactionsPerUser.slice(0, 100)}...`);
+      }
+
+      // === 13. MULTIPLE TRANSACTIONS CONDITIONS ===
+      const multiTx = extractFieldByLabel(messageContent, [
+        'Under what conditions may a user generate multiple transactions per round',
+        'conditions may a user generate multiple transactions',
+        'multiple transactions per round',
+        'Multiple Transactions'
+      ]);
+      if (multiTx) {
+        topic.multipleTransactionConditions = multiTx.slice(0, 1000);
+        console.log(`Multiple Tx Conditions: ${topic.multipleTransactionConditions.slice(0, 100)}...`);
+      }
+
+      // === 14. TRANSACTION SCALING ===
+      const scaling = extractFieldByLabel(messageContent, [
+        'How do you expect your transactions to scale',
+        'transactions to scale as your customer base scales',
+        'transaction scaling',
+        'Linearly, Super Linear, Sub Linear'
+      ]);
+      if (scaling) {
+        topic.transactionScaling = scaling.slice(0, 500);
+        console.log(`Transaction Scaling: ${topic.transactionScaling.slice(0, 100)}...`);
+      }
+
+      // === 15. MAINNET LAUNCH DATE ===
+      const launchDate = extractFieldByLabel(messageContent, [
+        'What is your anticipated launch date on MainNet',
+        'anticipated launch date on MainNet',
+        'MainNet launch date',
+        'Launch Date'
+      ]);
+      if (launchDate) {
+        topic.mainnetLaunchDate = launchDate.slice(0, 200);
+        console.log(`MainNet Launch Date: ${topic.mainnetLaunchDate}`);
+      } else {
+        // Fallback regex
+        const launchMatch = messageContent.match(/(?:MainNet|Launch|Go.?Live)[:\s]*(?:Date)?[:\s]*([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{4}-\d{2}-\d{2})/i);
+        if (launchMatch) {
+          topic.mainnetLaunchDate = launchMatch[1].trim();
+          console.log(`MainNet Launch Date: ${topic.mainnetLaunchDate}`);
+        }
+      }
+
+      // === 16. FIRST CUSTOMERS ===
+      const firstCustomers = extractFieldByLabel(messageContent, [
+        'Who will be your first customers and what is the expected go-live dates',
+        'first customers and what is the expected go-live',
+        'first customers',
+        'First Customers',
+        'go-live dates'
+      ]);
+      if (firstCustomers) {
+        topic.firstCustomers = firstCustomers.slice(0, 1000);
+        console.log(`First Customers: ${topic.firstCustomers.slice(0, 100)}...`);
+      }
+
+      // === 17. NO FA STATUS IMPACT ===
+      const noFAImpact = extractFieldByLabel(messageContent, [
+        'How would not having FA status change your operating plans',
+        'not having FA status change your operating plans',
+        'without FA status',
+        'No FA Status Impact'
+      ]);
+      if (noFAImpact) {
+        topic.noFAStatusImpact = noFAImpact.slice(0, 1000);
+        console.log(`No FA Status Impact: ${topic.noFAStatusImpact.slice(0, 100)}...`);
+      }
+
+      // === 18. BONA FIDE CONTROLS ===
+      const bonafide = extractFieldByLabel(messageContent, [
+        'Does your application have any controls to prevent non-bona fide transactions',
+        'controls to prevent non-bona fide transactions',
+        'non-bona fide transactions',
+        'Bona Fide Controls'
+      ]);
+      if (bonafide) {
+        topic.bonafideControls = bonafide.slice(0, 1000);
+        console.log(`Bona Fide Controls: ${topic.bonafideControls.slice(0, 100)}...`);
+      }
+
+      // === 19. ADDITIONAL NOTES ===
+      const notes = extractFieldByLabel(messageContent, [
+        "Additional Notes for the Committee's consideration",
+        'Additional Notes for the Committee',
+        'Additional Notes',
+        "Committee's consideration"
+      ]);
+      if (notes) {
+        topic.additionalNotes = notes.slice(0, 2000);
+        console.log(`Additional Notes: ${topic.additionalNotes.slice(0, 100)}...`);
+      }
+
+      // === ORGANIZATION BACKGROUND (legacy) ===
       const background = extractFieldByLabel(messageContent, [
         'Summary of Company and Background',
         'Company Background',
@@ -464,40 +675,11 @@ async function extractTopicDetails(page: Page, topic: TokenomicsApplication): Pr
         console.log(`Organization Background: ${topic.organizationBackground.slice(0, 100)}...`);
       }
 
-      // === APPLICATION SUMMARY ===
-      const summary = extractFieldByLabel(messageContent, [
-        'Application Summary',
-        'Summary of Application',
-        'Product Summary',
-        'What does the application do'
-      ]);
-      if (summary) {
-        topic.applicationSummary = summary.slice(0, 1000);
-        console.log(`Application Summary: ${topic.applicationSummary.slice(0, 100)}...`);
-      }
-
-      // === TARGET USERS ===
-      const targetUsers = extractFieldByLabel(messageContent, [
-        'Target Users',
-        'Who are the target users',
-        'Intended Users',
-        'User Base'
-      ]);
-      if (targetUsers) {
-        topic.targetUsers = targetUsers.slice(0, 500);
-        console.log(`Target Users: ${topic.targetUsers.slice(0, 100)}...`);
-      }
-
-      // === REWARD MECHANISM ===
-      const rewardMech = extractFieldByLabel(messageContent, [
-        'Reward Mechanism',
-        'Activity Markers',
-        'How will Activity Markers be earned',
-        'Rewards'
-      ]);
-      if (rewardMech) {
-        topic.rewardMechanism = rewardMech.slice(0, 500);
-        console.log(`Reward Mechanism: ${topic.rewardMechanism.slice(0, 100)}...`);
+      // === SUBMISSION DATE ===
+      const submissionDate = extractDate(messageContent);
+      if (submissionDate) {
+        topic.submissionDate = submissionDate;
+        console.log(`Submission Date: ${topic.submissionDate}`);
       }
 
       // === DOCUMENTATION URLS ===
@@ -511,7 +693,7 @@ async function extractTopicDetails(page: Page, topic: TokenomicsApplication): Pr
       topic.description = [
         topic.organizationBackground,
         topic.applicationSummary,
-        topic.targetUsers
+        topic.expectedUsers
       ].filter(Boolean).join('\n\n').slice(0, 2000) || extractCleanDescription(messageContent);
     }
 
