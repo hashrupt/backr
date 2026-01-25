@@ -28,6 +28,7 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "fastify": "^4.26.0",
+    "fastify-plugin": "^5.1.0",
     "keycloak-connect": "^26.0.0",
     "pg": "^8.17.2",
     "pino": "^8.19.0",
