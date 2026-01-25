@@ -20,22 +20,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: pnpm --filter @backr/api db:generate
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: pnpm typecheck
 
   unit-tests:
     name: Unit & Component Tests
@@ -43,22 +47,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: pnpm --filter @backr/api db:generate
 
-      - name: Run unit tests
-        run: npm test
+      - name: Run tests
+        run: pnpm test
 
       - name: Run coverage
-        run: npm run test:coverage
+        run: pnpm test:coverage
         continue-on-error: true
 
   build:
@@ -68,57 +76,117 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: pnpm --filter @backr/api db:generate
 
-      - name: Build
-        run: npm run build
+      - name: Build all packages
+        run: pnpm build
         env:
-          # Provide dummy env vars for build (no DB needed at build time)
+          # Dummy env vars for API build (no DB needed at build time)
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-          NEXTAUTH_SECRET: "ci-build-secret-not-real"
-          NEXTAUTH_URL: "http://localhost:3000"
+          # Vite env vars for web build
+          VITE_API_URL: "http://localhost:4001"
+          VITE_KEYCLOAK_URL: "http://localhost:8080"
+          VITE_KEYCLOAK_REALM: "backr"
+          VITE_KEYCLOAK_CLIENT_ID: "backr-web"
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          tags: backr/api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          tags: backr/web:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=http://localhost:4001
+            VITE_KEYCLOAK_URL=http://localhost:8080
+            VITE_KEYCLOAK_REALM=backr
+            VITE_KEYCLOAK_CLIENT_ID=backr-web
 
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [docker-build]
     if: github.event_name == 'pull_request'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: backr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: pnpm --filter @backr/api db:generate
+
+      - name: Push database schema
+        run: pnpm --filter @backr/api db:push
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backr
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: pnpm --filter @backr/web exec playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: pnpm --filter @backr/web test:e2e
         env:
-          # E2E tests run against Vercel preview URL when available
-          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || '' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL || '' }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-e2e-secret' }}
-          NEXTAUTH_URL: "http://localhost:5005"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backr
+          VITE_API_URL: http://localhost:4001
         continue-on-error: true
 
       - name: Upload Playwright report
@@ -126,5 +194,5 @@ jobs:
         if: always()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: apps/web/playwright-report/
           retention-days: 7

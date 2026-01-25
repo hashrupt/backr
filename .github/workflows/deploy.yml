@@ -3,10 +3,25 @@ name: Deploy
 on:
   push:
     branches: [develop, staging, main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - development
+          - test
+          - production
 
 concurrency:
   group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository }}/api
+  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
 
 jobs:
   determine-environment:
@@ -19,25 +34,122 @@ jobs:
       - name: Set environment
         id: env
         run: |
-          case "${{ github.ref_name }}" in
-            develop)
-              echo "environment=development" >> "$GITHUB_OUTPUT"
-              echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
-              ;;
-            staging)
-              echo "environment=test" >> "$GITHUB_OUTPUT"
-              echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
-              ;;
-            main)
-              echo "environment=production" >> "$GITHUB_OUTPUT"
-              echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+          if [ -n "${{ inputs.environment }}" ]; then
+            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.ref_name }}" in
+              develop)
+                echo "environment=development" >> "$GITHUB_OUTPUT"
+                ;;
+              staging)
+                echo "environment=test" >> "$GITHUB_OUTPUT"
+                ;;
+              main)
+                echo "environment=production" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          fi
+          echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    needs: [determine-environment]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for API
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.API_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for Web (Site A)
+        id: meta-web-a
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=ref,event=branch,suffix=-a
+            type=sha,prefix=,suffix=-a
+            type=raw,value=latest-a,enable=${{ github.ref_name == 'main' }}
+
+      - name: Build and push Web image (Site A)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta-web-a.outputs.tags }}
+          labels: ${{ steps.meta-web-a.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL_A || 'https://api-a.backr.io' }}
+            VITE_KEYCLOAK_URL=${{ vars.KEYCLOAK_URL || 'https://keycloak.canton.network' }}
+            VITE_KEYCLOAK_REALM=${{ vars.KEYCLOAK_REALM || 'backr' }}
+            VITE_KEYCLOAK_CLIENT_ID=${{ vars.KEYCLOAK_CLIENT_ID || 'backr-web' }}
+            VITE_SITE_VARIANT=A
+
+      - name: Extract metadata for Web (Site B)
+        id: meta-web-b
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=ref,event=branch,suffix=-b
+            type=sha,prefix=,suffix=-b
+            type=raw,value=latest-b,enable=${{ github.ref_name == 'main' }}
+
+      - name: Build and push Web image (Site B)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta-web-b.outputs.tags }}
+          labels: ${{ steps.meta-web-b.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL_B || 'https://api-b.backr.io' }}
+            VITE_KEYCLOAK_URL=${{ vars.KEYCLOAK_URL || 'https://keycloak.canton.network' }}
+            VITE_KEYCLOAK_REALM=${{ vars.KEYCLOAK_REALM || 'backr' }}
+            VITE_KEYCLOAK_CLIENT_ID=${{ vars.KEYCLOAK_CLIENT_ID || 'backr-web' }}
+            VITE_SITE_VARIANT=B
 
   deploy-site-a:
     name: Deploy Site A (${{ needs.determine-environment.outputs.environment }})
     runs-on: ubuntu-latest
-    needs: [determine-environment]
+    needs: [determine-environment, build-and-push]
     environment: ${{ needs.determine-environment.outputs.environment }}-a
     steps:
       - uses: actions/checkout@v4
@@ -45,19 +157,17 @@ jobs:
       - name: Deploy Site A
         run: |
           echo "Deploying Site A to ${{ needs.determine-environment.outputs.environment }}"
+          echo "API Image: ${{ env.API_IMAGE }}:${{ github.ref_name }}"
+          echo "Web Image: ${{ env.WEB_IMAGE }}:${{ github.ref_name }}-a"
           echo "SITE_VARIANT=A"
           echo "DAML_MODEL_VERSION=1.0"
-          # When Vercel CLI is configured:
-          # vercel deploy --prod --env SITE_VARIANT=A --env DAML_MODEL_VERSION=1.0
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_A }}
+          # Deploy via SSH to target server:
+          # ssh deploy@server "docker compose pull && docker compose up -d"
 
   deploy-site-b:
     name: Deploy Site B (${{ needs.determine-environment.outputs.environment }})
     runs-on: ubuntu-latest
-    needs: [determine-environment]
+    needs: [determine-environment, build-and-push]
     if: needs.determine-environment.outputs.deploy_site_b == 'true'
     environment: ${{ needs.determine-environment.outputs.environment }}-b
     steps:
@@ -66,14 +176,12 @@ jobs:
       - name: Deploy Site B
         run: |
           echo "Deploying Site B to ${{ needs.determine-environment.outputs.environment }}"
+          echo "API Image: ${{ env.API_IMAGE }}:${{ github.ref_name }}"
+          echo "Web Image: ${{ env.WEB_IMAGE }}:${{ github.ref_name }}-b"
           echo "SITE_VARIANT=B"
           echo "DAML_MODEL_VERSION=2.0"
-          # When Vercel CLI is configured:
-          # vercel deploy --prod --env SITE_VARIANT=B --env DAML_MODEL_VERSION=2.0
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_B }}
+          # Deploy via SSH to target server:
+          # ssh deploy@server "docker compose pull && docker compose up -d"
 
   post-deploy:
     name: Post-deploy checks
