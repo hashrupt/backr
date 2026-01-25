@@ -5,6 +5,20 @@ RUN corepack enable && corepack prepare pnpm@10 --activate
 
 WORKDIR /app
 
+# Build args for Vite environment variables
+ARG VITE_API_URL=http://localhost:4001
+ARG VITE_KEYCLOAK_URL=http://localhost:8080
+ARG VITE_KEYCLOAK_REALM=backr
+ARG VITE_KEYCLOAK_CLIENT_ID=backr-web
+ARG VITE_SITE_VARIANT=A
+
+# Set as env vars for build
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL
+ENV VITE_KEYCLOAK_REALM=$VITE_KEYCLOAK_REALM
+ENV VITE_KEYCLOAK_CLIENT_ID=$VITE_KEYCLOAK_CLIENT_ID
+ENV VITE_SITE_VARIANT=$VITE_SITE_VARIANT
+
 # Copy workspace root files
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/

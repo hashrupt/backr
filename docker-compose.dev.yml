@@ -1,0 +1,60 @@
+# Development override - use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+version: "3.8"
+
+services:
+  # PostgreSQL - same as production
+  postgres:
+    ports:
+      - "5432:5432"
+
+  # API with hot-reload (runs from host, connects to Docker postgres)
+  # Use `pnpm --filter @backr/api dev` with DATABASE_URL pointing to localhost:5432
+
+  # For full Docker dev environment with live reload:
+  api-dev:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    container_name: backr-api-dev
+    command: sh -c "pnpm --filter @backr/api db:push && pnpm --filter @backr/api dev"
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: development
+      PORT: 4001
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/backr
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/backr
+      CORS_ORIGIN: http://localhost:5173
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://localhost:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-backr}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backr-api}
+    volumes:
+      - ./apps/api/src:/app/apps/api/src:ro
+      - ./packages/shared/src:/app/packages/shared/src:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Web dev server with hot-reload
+  web-dev:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: builder
+    container_name: backr-web-dev
+    command: pnpm --filter @backr/web dev --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:4001
+      VITE_KEYCLOAK_URL: ${KEYCLOAK_URL:-http://localhost:8080}
+      VITE_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-backr}
+      VITE_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backr-web}
+      VITE_SITE_VARIANT: ${SITE_VARIANT:-A}
+    volumes:
+      - ./apps/web/src:/app/apps/web/src:ro
+      - ./packages/shared/src:/app/packages/shared/src:ro
+    depends_on:
+      - api-dev

@@ -1,9 +1,11 @@
 version: "3.8"
 
 services:
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
     container_name: backr-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -17,6 +19,54 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Fastify API
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: backr-api
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/backr
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/backr
+      CORS_ORIGIN: http://localhost:3000
+      # Keycloak (optional for local dev)
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://localhost:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-backr}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backr-api}
+      # Canton (optional)
+      CANTON_SCAN_PROXY_URL: ${CANTON_SCAN_PROXY_URL:-}
+      CANTON_SCAN_PROXY_TOKEN: ${CANTON_SCAN_PROXY_TOKEN:-}
+      CANTON_LEDGER_URL: ${CANTON_LEDGER_URL:-}
+      SITE_VARIANT: ${SITE_VARIANT:-A}
+      DAML_MODEL_VERSION: ${DAML_MODEL_VERSION:-1.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # React + Vite web app (nginx)
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4001
+        VITE_KEYCLOAK_URL: ${KEYCLOAK_URL:-http://localhost:8080}
+        VITE_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-backr}
+        VITE_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backr-web}
+        VITE_SITE_VARIANT: ${SITE_VARIANT:-A}
+    container_name: backr-web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
