@@ -9,6 +9,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
+    // DATABASE_URL uses PgBouncer (port 6543) for connection pooling
     url: process.env["DATABASE_URL"],
   },
 });

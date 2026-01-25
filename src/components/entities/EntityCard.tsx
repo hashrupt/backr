@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 
 // Use string literal types to avoid importing from Prisma
 type ClaimStatus = "UNCLAIMED" | "PENDING_CLAIM" | "CLAIMED" | "SELF_REGISTERED";
@@ -121,12 +122,17 @@ export function EntityCard({ entity }: EntityCardProps) {
 
         {/* Party ID - more readable format */}
         <div className="bg-muted/50 rounded-lg p-3">
-          <p className="text-xs text-muted-foreground mb-1">Party ID</p>
-          <p className="text-sm font-mono">
-            <span className="text-primary">{namespace}</span>
-            <span className="text-muted-foreground">::</span>
-            <span>{shortId}</span>
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground mb-1">Party ID</p>
+              <p className="text-sm font-mono truncate" title={entity.partyId}>
+                <span className="text-primary">{namespace}</span>
+                <span className="text-muted-foreground">::</span>
+                <span>{shortId}</span>
+              </p>
+            </div>
+            <CopyButton text={entity.partyId} iconOnly />
+          </div>
         </div>
 
         {/* Status badges */}

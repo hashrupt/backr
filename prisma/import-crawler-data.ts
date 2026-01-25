@@ -101,6 +101,53 @@ const categoryPatterns: Record<string, string[]> = {
   'Storage': ['storage', 'ipfs', 'file', 'data storage', 'backup'],
 };
 
+// Extended keyword dictionary for rich tagging (keyword → display label)
+const keywordDictionary: Record<string, string> = {
+  // Finance & DeFi
+  'defi': 'DeFi', 'lending': 'Lending', 'borrowing': 'Borrowing', 'yield': 'Yield',
+  'stablecoin': 'Stablecoin', 'trading': 'Trading', 'swap': 'Swap', 'liquidity': 'Liquidity',
+  'treasury': 'Treasury', 'payment': 'Payments', 'settlement': 'Settlement',
+  'amm': 'AMM', 'dex': 'DEX', 'derivatives': 'Derivatives', 'margin': 'Margin',
+  'staking': 'Staking', 'payout': 'Payouts', 'remittance': 'Remittance',
+  // Tokenization & Assets
+  'tokeniz': 'Tokenized', 'rwa': 'RWA', 'securities': 'Securities', 'equity': 'Equity',
+  'bond': 'Bonds', 'real estate': 'Real Estate', 'commodity': 'Commodities',
+  'nft': 'NFT', 'collectible': 'Collectibles', 'asset': 'Digital Assets',
+  // Infrastructure & Tech
+  'validator': 'Validator', 'node': 'Node', 'infrastructure': 'Infrastructure',
+  'bridge': 'Bridge', 'interoperability': 'Interop', 'wallet': 'Wallet',
+  'custody': 'Custody', 'sdk': 'SDK', 'api': 'API', 'protocol': 'Protocol',
+  'smart contract': 'Smart Contracts', 'ledger': 'Ledger', 'on-chain': 'On-chain',
+  'cross-chain': 'Cross-chain', 'multichain': 'Multichain', 'layer': 'Layer',
+  // Identity & Compliance
+  'kyc': 'KYC', 'aml': 'AML', 'identity': 'Identity', 'compliance': 'Compliance',
+  'verification': 'Verification', 'credential': 'Credentials', 'privacy': 'Privacy',
+  'regulated': 'Regulated', 'compliant': 'Compliant', 'audit': 'Auditable',
+  'zero-knowledge': 'ZK Proofs', 'encryption': 'Encrypted',
+  // Data & AI
+  'analytics': 'Analytics', 'oracle': 'Oracle', 'indexing': 'Indexing',
+  'reporting': 'Reporting', 'machine learning': 'ML', 'artificial intelligence': 'AI',
+  'intelligence': 'Intelligence', 'prediction': 'Prediction',
+  // Users & Markets
+  'institutional': 'Institutional', 'enterprise': 'Enterprise', 'retail': 'Retail',
+  'b2b': 'B2B', 'marketplace': 'Marketplace', 'exchange': 'Exchange',
+  'consumer': 'Consumer', 'developer': 'Developers',
+  // Gaming & Social
+  'game': 'Gaming', 'gaming': 'Gaming', 'play': 'Play-to-Earn', 'esport': 'Esports',
+  'metaverse': 'Metaverse', 'social': 'Social',
+  // Storage
+  'storage': 'Storage', 'ipfs': 'IPFS', 'backup': 'Backup',
+  // Canton-specific
+  'canton': 'Canton', 'daml': 'Daml', 'featured app': 'Featured App',
+  'canton coin': 'Canton Coin', 'synchronizer': 'Synchronizer',
+  // Other domains
+  'insurance': 'Insurance', 'healthcare': 'Healthcare', 'supply chain': 'Supply Chain',
+  'carbon': 'Carbon Credits', 'energy': 'Energy', 'crowdfund': 'Crowdfunding',
+  'governance': 'Governance', 'dao': 'DAO', 'voting': 'Voting',
+  'automation': 'Automation', 'treasury management': 'Treasury Mgmt',
+  'open source': 'Open Source', 'non-custodial': 'Non-custodial',
+};
+
 function detectCategory(app: CrawlerApp): { category: string; tags: string[] } {
   const text = [
     app.applicationSummary,
@@ -112,13 +159,13 @@ function detectCategory(app: CrawlerApp): { category: string; tags: string[] } {
   ].filter(Boolean).join(' ').toLowerCase();
 
   const matchedCategories: { cat: string; score: number }[] = [];
-  const tags: string[] = [];
+  const categoryTags: string[] = [];
 
   for (const [cat, patterns] of Object.entries(categoryPatterns)) {
     const matches = patterns.filter(p => text.includes(p));
     if (matches.length > 0) {
       matchedCategories.push({ cat, score: matches.length });
-      tags.push(...matches.slice(0, 3)); // Add up to 3 matched keywords as tags
+      categoryTags.push(...matches.slice(0, 3));
     }
   }
 
@@ -126,10 +173,26 @@ function detectCategory(app: CrawlerApp): { category: string; tags: string[] } {
   matchedCategories.sort((a, b) => b.score - a.score);
   const primaryCategory = matchedCategories[0]?.cat || 'Other';
 
-  // Dedupe and limit tags
-  const uniqueTags = [...new Set(tags)].slice(0, 5);
+  // Extract rich tags from the extended dictionary
+  const richTags: string[] = [];
+  for (const [keyword, label] of Object.entries(keywordDictionary)) {
+    if (text.includes(keyword) && !richTags.includes(label)) {
+      richTags.push(label);
+    }
+  }
 
-  return { category: primaryCategory, tags: uniqueTags };
+  // Remove duplicates with category tags, prefer rich labels
+  const allTags = [...new Set(richTags)];
+
+  // Remove "Canton" (too generic - every app mentions it) and the primary category label
+  const filtered = allTags.filter(t =>
+    t !== 'Canton' && t !== primaryCategory && t !== 'Featured App'
+  );
+
+  // Limit to 12 tags
+  const finalTags = filtered.slice(0, 12);
+
+  return { category: primaryCategory, tags: finalTags };
 }
 
 async function importCrawlerData() {

@@ -6,9 +6,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hash } from "bcryptjs";
 
-const connectionString = process.env.DATABASE_URL;
+// Use DIRECT_URL for seeding (bypasses PgBouncer for transaction support)
+const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DATABASE_URL environment variable is not set");
+  throw new Error("DIRECT_URL or DATABASE_URL environment variable is not set");
 }
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
