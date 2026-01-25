@@ -15,14 +15,20 @@ const envSchema = z.object({
   KEYCLOAK_REALM: z.string().default("backr"),
   KEYCLOAK_CLIENT_ID: z.string().default("backr-api"),
 
-  // Canton
-  CANTON_LEDGER_URL: z.string().optional(),
+  // Canton Ledger
+  CANTON_LEDGER_HOST: z.string().default("localhost"),
+  CANTON_LEDGER_PORT: z.coerce.number().default(5011),
+  CANTON_USE_TLS: z.string().default("false").transform((s) => s === "true"),
+  CANTON_AUTH_TOKEN: z.string().optional(),
   SITE_VARIANT: z.enum(["A", "B"]).default("A"),
   DAML_MODEL_VERSION: z.string().default("1.0"),
 
-  // Canton Scan Proxy
+  // Canton Scan Proxy (CIP-56)
   CANTON_SCAN_PROXY_URL: z.string().optional(),
   CANTON_SCAN_PROXY_TOKEN: z.string().optional(),
+
+  // Validator Wallet (for scan-proxy context)
+  VALIDATOR_HOST: z.string().default("http://localhost:3000"),
 
   // CORS
   CORS_ORIGIN: z.string().default("http://localhost:5173"),

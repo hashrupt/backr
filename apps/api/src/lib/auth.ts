@@ -6,11 +6,12 @@ import { config } from "../config.js";
 declare module "fastify" {
   interface FastifyRequest {
     user?: {
-      sub: string;
+      sub: string; // Party ID (used for Canton operations)
       email?: string;
       name?: string;
       preferred_username?: string;
     };
+    authToken?: string; // Raw Bearer token for Canton client
   }
 }
 
@@ -88,6 +89,7 @@ export async function authenticate(
   const token = authHeader.slice(7);
   try {
     request.user = await verifyToken(token);
+    request.authToken = token; // Store for Canton client calls
   } catch {
     return reply.status(401).send({ error: "Invalid or expired token" });
   }
@@ -103,9 +105,31 @@ export async function optionalAuth(request: FastifyRequest): Promise<void> {
   const token = authHeader.slice(7);
   try {
     request.user = await verifyToken(token);
+    request.authToken = token;
   } catch {
     // Silently ignore invalid tokens for optional auth
   }
+}
+
+/**
+ * Extract Bearer token from request (for Canton client calls)
+ */
+export function extractAuthToken(request: FastifyRequest): string | undefined {
+  // Use cached token if available
+  if (request.authToken) return request.authToken;
+
+  const authHeader = request.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+  return undefined;
+}
+
+/**
+ * Get user's party ID from request (for Canton operations)
+ */
+export function getPartyId(request: FastifyRequest): string | undefined {
+  return request.user?.sub;
 }
 
 export default fp(
