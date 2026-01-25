@@ -1,6 +1,8 @@
 # Backr - Deployment, CI/CD & Branching Strategy
 
-## Current Architecture
+> **Architecture Decision (Jan 2025):** Backr will converge to the same tech stack as Settla to maximize code sharing, reduce maintenance burden, and align on Canton Network patterns. See "Planned Stack Migration" section below.
+
+## Current Architecture (Pre-Migration)
 
 ```
 Browser (Next.js 16 SSR + Client Components)
@@ -14,11 +16,48 @@ Browser (Next.js 16 SSR + Client Components)
                           Returns fake txHash, simulated balances
 ```
 
-**Stack:** Next.js 16 | React 19 | Tailwind CSS 4 | Prisma 7 | Supabase PostgreSQL | NextAuth JWT
+**Current Stack:** Next.js 16 | React 19 | Tailwind CSS 4 | Prisma 7 | Supabase PostgreSQL | NextAuth JWT
 
 **What's real:** 110 source files, 15 API routes, 6 DB models, full auth, Zod validation, Prisma transactions
 
 **What's mocked:** Canton ledger ops in `src/services/canton/mock.ts` (lock CC, verify ownership, unlock, withdraw)
+
+## Planned Stack Migration
+
+### Target Stack (Shared with Settla)
+
+| Layer | Current (Backr) | Target (Shared) | Rationale |
+|-------|----------------|-----------------|-----------|
+| Frontend | Next.js 16 + React 19 | **React 18 + Vite 5** | SPA model, Keycloak PKCE auth, no SSR needed |
+| Backend API | Next.js API Routes | **Fastify 4** | Dedicated API server, Canton client integration, Swagger |
+| Auth | NextAuth JWT + Supabase Auth | **Keycloak (Canton Network)** | Canton Network provides managed Keycloak |
+| Database | Supabase PostgreSQL | **PostgreSQL 16 + Prisma 5** | Self-managed, Docker Compose |
+| Deployment | Vercel (6 projects) | **Docker Compose on managed VMs** | Consistent with Canton Network architecture |
+| Container Registry | N/A | **GHCR (ghcr.io)** | GitHub-native, shared with Settla |
+| Testing | Vitest + Playwright | **Vitest + Playwright** (no change) | Already aligned |
+| CI/CD | GitHub Actions → Vercel | **GitHub Actions → Docker Compose** | Same pipeline pattern as Settla |
+
+### Migration Order
+
+1. **Frontend**: Next.js → React + Vite (extract pages to SPA components)
+2. **Backend**: Next.js API Routes → Fastify (extract route handlers to Fastify routes)
+3. **Auth**: NextAuth → Keycloak (Canton Network PKCE flow)
+4. **Database**: Supabase → self-managed PostgreSQL (keep Prisma, change connection)
+5. **Deploy**: Vercel → Docker Compose (API + Web containers, same as Settla)
+
+### Shared Components (with Settla)
+
+| Component | Package/Pattern | Shared How |
+|-----------|----------------|-----------|
+| Canton client | `canton-client.ts` pattern | Copy or shared package |
+| Scan-proxy client | `scan-proxy-client.ts` pattern | Copy or shared package |
+| Keycloak auth | PKCE flow + token refresh | Same pattern, different realm |
+| Feature flags | `@settla/shared` or shared package | Shared evaluation logic |
+| Docker Compose | Same structure | Template per project |
+| CI/CD workflows | Same GitHub Actions | Template per project |
+| Vitest config | Same setup pattern | Per-project config |
+
+> **Note:** Until migration is complete, the CI/CD plan below reflects the **current** Vercel-based deployment. Sections marked with "(POST-MIGRATION)" show the target Docker-based architecture.
 
 ---
 
@@ -774,5 +813,40 @@ Phase 8 (Flags & Monitoring)    ───── After Phase 7
 | Error monitoring | Sentry (recommended) vs LogRocket vs Highlight |
 | Production domain | backr.io? backr.xyz? TBD |
 | Canton DAML timeline | When will real integration replace mocks? |
-| Deploy method | 6 Vercel projects vs GitHub Actions `vercel deploy` |
 | Canton UI separation | How much UI diverges between DAML model A vs B? |
+
+## Post-Migration: Target Architecture
+
+After migrating to the shared stack, Backr's architecture will match Settla's:
+
+```
+Browser (React 18 + Vite 5)
+  |
+  +-- Keycloak OIDC Auth (PKCE)
+  |
+  +-- REST API (/api/*) --> Fastify Routes --> Canton Client --> Canton Ledger
+                                |                                   |
+                          Scan-Proxy Client                   DAML Contracts
+                          (CIP-56 context)                  (Backing, Interest,
+                                                             Campaign, Entity)
+```
+
+**Target Stack:** React 18 | Vite 5 | Fastify 4 | Prisma 5 | PostgreSQL 16 | Keycloak (Canton Network) | Docker Compose
+
+### Post-Migration Deployment
+
+| Environment | Canton Network | Self-Hosted Stack |
+|-------------|---------------|-------------------|
+| Local dev | N/A (Docker) | Canton + Keycloak + PostgreSQL + API + Web |
+| Devnet | Devnet | PostgreSQL + API + Web (Canton Network provides ledger + Keycloak) |
+| Testnet | Testnet | PostgreSQL + API + Web |
+| Mainnet | Mainnet | PostgreSQL + API + Web |
+
+### Post-Migration Container Images
+
+| Image | Source | Registry |
+|-------|--------|----------|
+| `ghcr.io/hashrupt/backr/api` | `apps/api/Dockerfile` | GHCR |
+| `ghcr.io/hashrupt/backr/web` | `apps/web/Dockerfile` | GHCR |
+
+Only 2 images — Canton and Keycloak are managed by Canton Network in deployed environments. Same pattern as Settla.
