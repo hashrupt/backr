@@ -1,0 +1,54 @@
+name: Promote to Production
+
+on:
+  push:
+    branches: [staging]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Create production promotion PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')
+          echo "existing_pr=$EXISTING" >> "$GITHUB_OUTPUT"
+
+      - name: Create production promotion PR
+        if: steps.check-pr.outputs.existing_pr == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head staging \
+            --title "🚀 Promote staging → production" \
+            --body "$(cat <<'EOF'
+          ## Production Release
+
+          Automated promotion of \`staging\` branch to \`main\` (production).
+
+          **⚠️ This PR requires manual approval to merge.**
+
+          **Changes included:**
+          $(git log main..staging --oneline 2>/dev/null || echo "First production release")
+
+          ### Pre-merge checklist
+          - [ ] CI passing on staging
+          - [ ] E2E tests passing against test environment
+          - [ ] No critical issues in staging
+          - [ ] Changelog reviewed
+          EOF
+          )" \
+            --label "ready-for-prod"

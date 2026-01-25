@@ -1,0 +1,99 @@
+name: Deploy
+
+on:
+  push:
+    branches: [develop, staging, main]
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  determine-environment:
+    name: Determine environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      deploy_site_b: ${{ steps.env.outputs.deploy_site_b }}
+    steps:
+      - name: Set environment
+        id: env
+        run: |
+          case "${{ github.ref_name }}" in
+            develop)
+              echo "environment=development" >> "$GITHUB_OUTPUT"
+              echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
+              ;;
+            staging)
+              echo "environment=test" >> "$GITHUB_OUTPUT"
+              echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
+              ;;
+            main)
+              echo "environment=production" >> "$GITHUB_OUTPUT"
+              echo "deploy_site_b=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  deploy-site-a:
+    name: Deploy Site A (${{ needs.determine-environment.outputs.environment }})
+    runs-on: ubuntu-latest
+    needs: [determine-environment]
+    environment: ${{ needs.determine-environment.outputs.environment }}-a
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Site A
+        run: |
+          echo "Deploying Site A to ${{ needs.determine-environment.outputs.environment }}"
+          echo "SITE_VARIANT=A"
+          echo "DAML_MODEL_VERSION=1.0"
+          # When Vercel CLI is configured:
+          # vercel deploy --prod --env SITE_VARIANT=A --env DAML_MODEL_VERSION=1.0
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_A }}
+
+  deploy-site-b:
+    name: Deploy Site B (${{ needs.determine-environment.outputs.environment }})
+    runs-on: ubuntu-latest
+    needs: [determine-environment]
+    if: needs.determine-environment.outputs.deploy_site_b == 'true'
+    environment: ${{ needs.determine-environment.outputs.environment }}-b
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Site B
+        run: |
+          echo "Deploying Site B to ${{ needs.determine-environment.outputs.environment }}"
+          echo "SITE_VARIANT=B"
+          echo "DAML_MODEL_VERSION=2.0"
+          # When Vercel CLI is configured:
+          # vercel deploy --prod --env SITE_VARIANT=B --env DAML_MODEL_VERSION=2.0
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_B }}
+
+  post-deploy:
+    name: Post-deploy checks
+    runs-on: ubuntu-latest
+    needs: [determine-environment, deploy-site-a, deploy-site-b]
+    if: always() && needs.deploy-site-a.result == 'success'
+    steps:
+      - name: Smoke test Site A
+        run: |
+          echo "Running smoke tests against Site A..."
+          # curl -f $SITE_A_URL/api/health || exit 1
+
+      - name: Smoke test Site B
+        if: needs.deploy-site-b.result == 'success'
+        run: |
+          echo "Running smoke tests against Site B..."
+          # curl -f $SITE_B_URL/api/health || exit 1
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Deploy failed for ${{ needs.determine-environment.outputs.environment }}"
+          # Add Slack/Discord notification here

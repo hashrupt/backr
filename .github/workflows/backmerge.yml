@@ -1,0 +1,64 @@
+name: Backmerge Hotfix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backmerge:
+    name: Backmerge to develop and staging
+    runs-on: ubuntu-latest
+    # Only run if the merge commit message doesn't come from a promotion PR
+    if: "!contains(github.event.head_commit.message, 'Promote staging')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Backmerge to staging
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if staging branch exists
+          if git ls-remote --exit-code --heads origin staging; then
+            EXISTING=$(gh pr list --base staging --head main --state open --json number --jq '.[0].number')
+            if [ -z "$EXISTING" ]; then
+              gh pr create \
+                --base staging \
+                --head main \
+                --title "Backmerge: main → staging" \
+                --body "Automated backmerge of hotfix from main to staging." \
+                --label "backmerge" || echo "No diff between main and staging"
+            fi
+            # Try auto-merge
+            PR_NUMBER=$(gh pr list --base staging --head main --state open --json number --jq '.[0].number')
+            if [ -n "$PR_NUMBER" ]; then
+              gh pr merge "$PR_NUMBER" --auto --merge || echo "Auto-merge not available"
+            fi
+          fi
+
+      - name: Backmerge to develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if develop branch exists
+          if git ls-remote --exit-code --heads origin develop; then
+            EXISTING=$(gh pr list --base develop --head main --state open --json number --jq '.[0].number')
+            if [ -z "$EXISTING" ]; then
+              gh pr create \
+                --base develop \
+                --head main \
+                --title "Backmerge: main → develop" \
+                --body "Automated backmerge of hotfix from main to develop." \
+                --label "backmerge" || echo "No diff between main and develop"
+            fi
+            # Try auto-merge
+            PR_NUMBER=$(gh pr list --base develop --head main --state open --json number --jq '.[0].number')
+            if [ -n "$PR_NUMBER" ]; then
+              gh pr merge "$PR_NUMBER" --auto --merge || echo "Auto-merge not available"
+            fi
+          fi

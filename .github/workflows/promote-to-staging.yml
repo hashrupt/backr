@@ -1,0 +1,59 @@
+name: Promote to Staging
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Create staging promotion PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh pr list --base staging --head develop --state open --json number --jq '.[0].number')
+          echo "existing_pr=$EXISTING" >> "$GITHUB_OUTPUT"
+
+      - name: Create promotion PR
+        if: steps.check-pr.outputs.existing_pr == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base staging \
+            --head develop \
+            --title "Promote develop → staging" \
+            --body "$(cat <<'EOF'
+          ## Auto-promotion PR
+
+          Automated promotion of \`develop\` branch to \`staging\`.
+
+          This PR was created automatically after a successful merge to \`develop\`.
+          CI must pass before this PR can be merged.
+
+          **Changes since last staging promotion:**
+          $(git log staging..develop --oneline 2>/dev/null || echo "First promotion")
+          EOF
+          )" \
+            --label "auto-promote"
+
+      - name: Enable auto-merge
+        if: steps.check-pr.outputs.existing_pr == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --base staging --head develop --state open --json number --jq '.[0].number')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr merge "$PR_NUMBER" --auto --merge || echo "Auto-merge not available, PR created for manual review"
+          fi
