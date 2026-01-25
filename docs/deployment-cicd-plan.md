@@ -26,14 +26,14 @@ Browser (Next.js 16 SSR + Client Components)
 
 | Area | Current | Needed |
 |------|---------|--------|
-| CI/CD | None | GitHub Actions pipeline |
-| Tests | 0 files | Unit + E2E coverage |
-| Branching | Direct push to main | Branch-per-environment |
-| Deploy config | None | Vercel multi-project |
-| A/B sites | None | Dual-site deploys (DAML model A + B) |
+| CI/CD | GitHub Actions pipeline (ci.yml + 5 workflows) | Configure Vercel tokens |
+| Tests | 243 unit/component/API tests + E2E specs | Add coverage targets |
+| Branching | develop + staging + main branches | Set branch protection rules |
+| Deploy config | Workflow stubs for 6 Vercel projects | Create Vercel projects |
+| A/B sites | Dual-site deploy for all envs (dev, test, prod) | Configure Canton endpoints |
 | Error monitoring | None | Sentry or equivalent |
 | Rate limiting | None | API route protection |
-| Canton ledger | Mocked | Real DAML integration (future) |
+| Canton ledger | Mocked | Real DAML integration (separate UI per model) |
 
 ---
 
@@ -45,19 +45,22 @@ Browser (Next.js 16 SSR + Client Components)
 feature/* ──PR──▶ develop ──auto──▶ staging ──1-click──▶ main
                      │                 │                    │
                    DEV ENV          TEST ENV             PROD ENV
-                  (1 site)         (2 sites)            (2 sites)
-                     │            ┌────┴────┐          ┌────┴────┐
-               dev.backr.io    test-a       test-b   prod-a      prod-b
-                               .backr.io   .backr.io .backr.io   .backr.io
-                               (DAML v1)   (DAML v2) (DAML v1)   (DAML v2)
+                  (2 sites)        (2 sites)            (2 sites)
+               ┌────┴────┐      ┌────┴────┐          ┌────┴────┐
+            dev-a       dev-b  test-a    test-b     prod-a      prod-b
+           .backr.io  .backr.io .backr.io .backr.io .backr.io   .backr.io
+           (DAML v1)  (DAML v2) (DAML v1) (DAML v2) (DAML v1)  (DAML v2)
 ```
+
+> **Note:** Dev also runs dual sites because Canton integration will require
+> separate UI work per DAML model. All environments are symmetric (A + B).
 
 ### Branch → Environment Mapping
 
 | Branch | Environment | Sites | Auto-deploy? |
 |--------|------------|-------|-------------|
 | `feature/*` | Vercel preview URL | 1 (ephemeral) | On PR open |
-| `develop` | Dev | 1 | On merge to develop |
+| `develop` | Dev | 2 (A + B) | On merge to develop |
 | `staging` | Test | 2 (A + B) | On merge to staging |
 | `main` | Prod | 2 (A + B) | On merge to main |
 
@@ -109,7 +112,8 @@ The app reads `SITE_VARIANT` and `DAML_MODEL_VERSION` via `src/lib/env.ts` to ro
 
 | Environment | Database | Notes |
 |-------------|----------|-------|
-| Dev | Supabase project: `backr-dev` | Seeded with test data |
+| Dev-A | Supabase project: `backr-dev` | Shared dev DB, Canton mock or endpoint A |
+| Dev-B | Same as Dev-A | Same DB — different Canton endpoint / DAML model |
 | Test-A | Supabase project: `backr-test` | Shared DB for both test sites |
 | Test-B | Same as Test-A | Same DB — DAML model diff is at Canton layer |
 | Prod-A | Supabase project: `backr-prod` | Shared production DB |
@@ -121,19 +125,20 @@ The A/B split is at the **Canton ledger layer**, not the database layer. Both A 
 
 ## 3. Deployment
 
-### Vercel Multi-Project Setup (5 projects, 1 repo)
+### Vercel Multi-Project Setup (6 projects, 1 repo)
 
 | Vercel Project | Branch | Domain | Key Env Vars |
 |---------------|--------|--------|-------------|
-| `backr-dev` | `develop` | dev.backr.io | Dev DB, mock Canton |
+| `backr-dev-a` | `develop` | dev-a.backr.io | Dev DB, Canton endpoint A / mock |
+| `backr-dev-b` | `develop` | dev-b.backr.io | Dev DB, Canton endpoint B / mock |
 | `backr-test-a` | `staging` | test-a.backr.io | Test DB, Canton endpoint A |
 | `backr-test-b` | `staging` | test-b.backr.io | Test DB, Canton endpoint B |
 | `backr-prod-a` | `main` | backr.io | Prod DB, Canton endpoint A |
 | `backr-prod-b` | `main` | b.backr.io | Prod DB, Canton endpoint B |
 
-Test-A and Test-B both deploy from `staging` but are separate Vercel projects with different env vars. Same for Prod-A and Prod-B from `main`.
+All environments deploy dual sites (A + B). Dev sites enable Canton UI development against different DAML models from the start. Each pair deploys from the same branch but as separate Vercel projects with different env vars.
 
-**Alternative:** Deploy via GitHub Actions using `vercel deploy --env` for tighter control, instead of managing 5 separate Vercel projects.
+**Alternative:** Deploy via GitHub Actions using `vercel deploy --env` for tighter control, instead of managing 6 separate Vercel projects.
 
 **Cost:** Vercel Free covers 1 project. Pro ($20/mo) for team features. Multiple projects may require Pro or use the GitHub Actions deploy approach.
 
@@ -748,9 +753,9 @@ Phase 8 (Flags & Monitoring)    ───── After Phase 7
 | Question | Answer |
 |----------|--------|
 | Branch strategy | Branch-per-environment (develop → staging → main) |
-| Environments | Dev (1 site), Test (2 sites), Prod (2 sites) |
-| A/B sites purpose | Run different DAML model versions in parallel |
-| Deploy target | Vercel (5 projects) or GitHub Actions-driven Vercel deploys |
+| Environments | Dev (2 sites), Test (2 sites), Prod (2 sites) — all A/B |
+| A/B sites purpose | Run different DAML model versions + separate Canton UI |
+| Deploy target | Vercel (6 projects) or GitHub Actions-driven Vercel deploys |
 | Manual gates | 2 only: approve feature PR + approve staging→main promotion |
 | Site differentiation | Environment variables only, same codebase |
 | DB per site | Shared per environment (A+B share same DB) |
@@ -760,6 +765,7 @@ Phase 8 (Flags & Monitoring)    ───── After Phase 7
 | API mocking | MSW for component tests |
 | Coverage target | 75% overall, 90% services, 80% routes |
 | E2E strategy | Playwright against Vercel preview URLs in CI |
+| Dev dual-site | Dev environment runs A/B sites for Canton UI development |
 
 ## Open Decisions
 
@@ -768,4 +774,5 @@ Phase 8 (Flags & Monitoring)    ───── After Phase 7
 | Error monitoring | Sentry (recommended) vs LogRocket vs Highlight |
 | Production domain | backr.io? backr.xyz? TBD |
 | Canton DAML timeline | When will real integration replace mocks? |
-| Deploy method | 5 Vercel projects vs GitHub Actions `vercel deploy` |
+| Deploy method | 6 Vercel projects vs GitHub Actions `vercel deploy` |
+| Canton UI separation | How much UI diverges between DAML model A vs B? |
