@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Check DAR exists
+        run: |
+          DAR_FILE="canton/releases/backr-${{ steps.version.outputs.version }}.dar"
+          if [ ! -f "$DAR_FILE" ]; then
+            echo "::error::DAR file not found: $DAR_FILE"
+            echo "Make sure to run ./scripts/setup/bump-dar.sh ${{ steps.version.outputs.version }} before tagging"
+            exit 1
+          fi
+          echo "Found DAR: $DAR_FILE"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            canton/releases/backr-${{ steps.version.outputs.version }}.dar
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

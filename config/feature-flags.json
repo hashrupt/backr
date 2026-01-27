@@ -1,0 +1,27 @@
+{
+  "flags": {
+    "cip56-atomic-transfer": {
+      "id": "cip56-atomic-transfer",
+      "description": "CIP-56 atomic transfer for fee payments",
+      "enabled": true,
+      "experiment": {
+        "treatmentPercent": 100
+      }
+    },
+    "multi-campaign": {
+      "id": "multi-campaign",
+      "description": "Allow multiple campaigns per validated app",
+      "enabled": false
+    },
+    "staking-rewards": {
+      "id": "staking-rewards",
+      "description": "Staking rewards distribution",
+      "enabled": false
+    },
+    "dark-mode": {
+      "id": "dark-mode",
+      "description": "Dark mode theme toggle",
+      "enabled": false
+    }
+  }
+}
