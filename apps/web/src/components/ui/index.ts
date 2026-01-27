@@ -13,4 +13,13 @@ export { Textarea, type TextareaProps } from "./textarea";
 export { Alert, AlertTitle, AlertDescription, type AlertProps } from "./alert";
 export { Progress, type ProgressProps } from "./progress";
 export { Badge, badgeVariants, type BadgeProps } from "./badge";
-export { Select, type SelectProps } from "./select";
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+} from "./select";

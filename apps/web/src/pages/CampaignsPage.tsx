@@ -2,7 +2,13 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CampaignCard } from "@/components/campaigns/CampaignCard";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import api from "@/lib/api";
 
 interface Campaign {
@@ -81,23 +87,25 @@ export default function CampaignsPage() {
             }}
           />
         </div>
-        <Select
-          defaultValue={type}
-          onChange={(e) => updateParams("type", e.target.value)}
-          className="w-full sm:w-48"
-        >
-          <option value="all">All Types</option>
-          <option value="FEATURED_APP">Featured Apps</option>
-          <option value="VALIDATOR">Validators</option>
+        <Select value={type} onValueChange={(value) => updateParams("type", value)}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="FEATURED_APP">Featured Apps</SelectItem>
+            <SelectItem value="VALIDATOR">Validators</SelectItem>
+          </SelectContent>
         </Select>
-        <Select
-          defaultValue={sort}
-          onChange={(e) => updateParams("sort", e.target.value)}
-          className="w-full sm:w-48"
-        >
-          <option value="newest">Newest First</option>
-          <option value="ending">Ending Soon</option>
-          <option value="funded">Most Funded</option>
+        <Select value={sort} onValueChange={(value) => updateParams("sort", value)}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Newest First" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="ending">Ending Soon</SelectItem>
+            <SelectItem value="funded">Most Funded</SelectItem>
+          </SelectContent>
         </Select>
       </div>
 
