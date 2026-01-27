@@ -1,16 +1,38 @@
-# Development override - use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Development configuration for use with Canton Quickstart
+# Assumes Canton Quickstart is already running on localhost
+#
+# Usage:
+#   1. Start Canton Quickstart first
+#   2. Run: docker compose -f docker-compose.dev.yml up
+#
+# Canton Quickstart provides:
+#   - Canton participant at localhost:3975
+#   - Keycloak at http://keycloak.localhost:8082 (AppProvider realm)
+#   - Wallet/Validator at http://wallet.localhost:3000
+#
 version: "3.8"
 
 services:
-  # PostgreSQL - same as production
+  # PostgreSQL database (for Backr app data only)
   postgres:
+    image: postgres:16-alpine
+    container_name: backr-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: backr
+      POSTGRES_PASSWORD: backr
+      POSTGRES_DB: backr
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Use 5433 to avoid conflict with Canton Quickstart postgres
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U backr -d backr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # API with hot-reload (runs from host, connects to Docker postgres)
-  # Use `pnpm --filter @backr/api dev` with DATABASE_URL pointing to localhost:5432
-
-  # For full Docker dev environment with live reload:
+  # API with hot-reload
   api-dev:
     build:
       context: .
@@ -24,18 +46,28 @@ services:
       NODE_ENV: development
       PORT: 4001
       HOST: 0.0.0.0
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/backr
-      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/backr
+      DATABASE_URL: postgresql://backr:backr@postgres:5432/backr
+      DIRECT_URL: postgresql://backr:backr@postgres:5432/backr
       CORS_ORIGIN: http://localhost:5173
-      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://localhost:8080}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-backr}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backr-api}
+      # Keycloak - Use existing AppProvider realm from Canton Quickstart
+      KEYCLOAK_URL: http://keycloak.localhost:8082
+      KEYCLOAK_REALM: AppProvider
+      KEYCLOAK_CLIENT_ID: sv-app
+      # Canton - Use Canton Quickstart participant
+      CANTON_LEDGER_HOST: host.docker.internal
+      CANTON_LEDGER_PORT: 3975
+      CANTON_USE_TLS: "false"
+      VALIDATOR_HOST: http://wallet.localhost:3000
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "keycloak.localhost:host-gateway"
+      - "wallet.localhost:host-gateway"
 
   # Web dev server with hot-reload
   web-dev:
@@ -49,12 +81,15 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: http://localhost:4001
-      VITE_KEYCLOAK_URL: ${KEYCLOAK_URL:-http://localhost:8080}
-      VITE_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-backr}
-      VITE_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backr-web}
-      VITE_SITE_VARIANT: ${SITE_VARIANT:-A}
+      # Keycloak - Use existing AppProvider realm from Canton Quickstart
+      VITE_KEYCLOAK_URL: http://keycloak.localhost:8082
+      VITE_KEYCLOAK_REALM: AppProvider
+      VITE_KEYCLOAK_CLIENT_ID: app-provider-wallet
     volumes:
       - ./apps/web/src:/app/apps/web/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
     depends_on:
       - api-dev
+
+volumes:
+  postgres_dev_data:

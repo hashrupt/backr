@@ -1,0 +1,4 @@
+role,username,password,firstname,lastname,legal_entity
+operator,backr-operator,backr123,Backr,Operator,Backr Platform
+app,demo-app,demo123,Demo,App,Demo Featured App
+backer,test-backer,backer123,Test,Backer,Individual

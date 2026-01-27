@@ -20,6 +20,8 @@ import MyInterestsPage from "./pages/MyInterestsPage";
 import CompleteBackingPage from "./pages/CompleteBackingPage";
 import MyBackingsPage from "./pages/MyBackingsPage";
 import MyInvitesPage from "./pages/MyInvitesPage";
+import MyAppsPage from "./pages/MyAppsPage";
+import CreateAppCampaignPage from "./pages/CreateAppCampaignPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authenticated, loading, login } = useAuth();
@@ -131,6 +133,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MyInvitesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-apps"
+            element={
+              <ProtectedRoute>
+                <MyAppsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-apps/:contractId/campaigns/new"
+            element={
+              <ProtectedRoute>
+                <CreateAppCampaignPage />
               </ProtectedRoute>
             }
           />

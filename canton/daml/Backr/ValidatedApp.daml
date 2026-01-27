@@ -1,0 +1,74 @@
+-- Backr Validated Application Module
+-- BackrValidatedApplication template - gate for launching campaigns
+
+module Backr.ValidatedApp where
+
+import Backr.Types
+import Backr.Campaign (BackingCampaign(..))
+
+-- =============================================================================
+-- BackrValidatedApplication
+-- =============================================================================
+-- Created after fee payment. This is the gate for launching campaigns.
+-- Both operator and FA are signatories, representing mutual validation.
+
+template BackrValidatedApplication
+  with
+    operator : Party              -- Backr operator (signatory)
+    faParty : Party               -- Featured App party (signatory)
+    appPartyId : Text
+    appName : Text
+    metadata : Optional AppMetadata
+    validatedAt : Time
+    isActive : Bool
+  where
+    signatory operator, faParty
+
+    -- FA can update metadata
+    choice UpdateAppMetadata : ContractId BackrValidatedApplication
+      with
+        newMetadata : AppMetadata
+      controller faParty
+      do
+        create this with metadata = Some newMetadata
+
+    -- FA can create a staking/funding campaign (only with this contract!)
+    nonconsuming choice CreateCampaign : ContractId BackingCampaign
+      with
+        campaignId : Text
+        campaignType : Text        -- "STAKING" | "FUNDING"
+        goal : Decimal             -- Target amount in Amulets
+        minBacking : Decimal       -- Minimum backing per backer
+        maxBacking : Decimal       -- Maximum backing per backer
+        endsAt : Time
+      controller faParty
+      do
+        assertMsg "App must be active" isActive
+        now <- getTime
+        create BackingCampaign with
+          operator
+          faParty
+          appPartyId
+          appName
+          campaignId
+          campaignType
+          goal
+          raisedAmount = 0.0
+          minBacking
+          maxBacking
+          startsAt = now
+          endsAt
+          status = CampaignOpen
+
+    -- Either party can deactivate the app
+    choice DeactivateApp : ContractId BackrValidatedApplication
+      controller operator, faParty
+      do
+        create this with isActive = False
+
+    -- Operator can reactivate the app
+    choice ReactivateApp : ContractId BackrValidatedApplication
+      controller operator
+      do
+        assertMsg "App must be inactive" (not isActive)
+        create this with isActive = True

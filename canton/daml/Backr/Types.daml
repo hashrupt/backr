@@ -1,0 +1,47 @@
+-- Backr Types Module
+-- Core data types used across all Backr contracts
+
+module Backr.Types where
+
+import Splice.Api.Token.HoldingV1 (InstrumentId(..))
+
+-- Fee configuration for application validation
+data FeeConfig = FeeConfig with
+    amount : Decimal           -- e.g., 25.0 Amulets
+    instrumentId : InstrumentId -- CIP-56 instrument (Amulet)
+  deriving (Eq, Show)
+
+-- Application metadata
+data AppMetadata = AppMetadata with
+    name : Text
+    description : Optional Text
+    website : Optional Text
+    category : Text
+    logoUrl : Optional Text
+  deriving (Eq, Show)
+
+-- Campaign status enumeration
+data CampaignStatus
+  = CampaignDraft        -- Initial draft state
+  | CampaignOpen         -- Accepting backing pledges
+  | CampaignSelecting    -- FA selecting which backers to accept
+  | CampaignFunded       -- Campaign fully funded, backers locked
+  | CampaignClosed       -- Campaign ended normally
+  | CampaignCancelled    -- Campaign cancelled
+  deriving (Eq, Show)
+
+-- Backing status enumeration
+data BackingStatus
+  = BackingPledged       -- Backer has pledged interest
+  | BackingLocked        -- CC locked in contract
+  | BackingUnlocking     -- Unlock requested, waiting period
+  | BackingWithdrawn     -- CC withdrawn after unlock period
+  deriving (Eq, Show)
+
+-- Allocation status for fee payment
+data AllocationStatus
+  = AllocationPending    -- Waiting for allocation
+  | AllocationAccepted   -- Allocation accepted
+  | AllocationRejected   -- Allocation rejected
+  | AllocationExpired    -- Allocation expired
+  deriving (Eq, Show)

@@ -12,6 +12,8 @@ import campaignRoutes from "./routes/campaigns.js";
 import interestRoutes from "./routes/interests.js";
 import inviteRoutes from "./routes/invites.js";
 import backingRoutes from "./routes/backings.js";
+import appRoutes from "./routes/apps.js";
+import adminAppsRoutes from "./routes/admin/apps.js";
 
 const app = Fastify({
   logger: {
@@ -55,6 +57,8 @@ await app.register(campaignRoutes, { prefix: "/campaigns" });
 await app.register(interestRoutes, { prefix: "/interests" });
 await app.register(inviteRoutes, { prefix: "/invites" });
 await app.register(backingRoutes, { prefix: "/backings" });
+await app.register(appRoutes, { prefix: "/apps" });
+await app.register(adminAppsRoutes, { prefix: "/admin/apps" });
 
 // Start
 try {

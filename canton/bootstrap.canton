@@ -1,0 +1,43 @@
+// Canton Bootstrap Script for Backr
+// Initializes the local Canton network and uploads DAR
+
+import com.digitalasset.canton.console.ParticipantReference
+
+// Wait for nodes to be ready
+logger.info("Waiting for nodes to initialize...")
+
+// Initialize the domain
+mediators.local.mediator.initialize(
+  local,
+  Seq(sequencers.local)
+)
+
+// Start sequencer
+sequencers.local.sequencer.initialize_from_beginning(
+  domainId = local,
+  domainParameters = SequencerDomainParameters.defaultDynamic
+)
+
+// Connect participant to the domain
+participants.backr.domains.connect_local(local)
+
+logger.info("Domain initialized and participant connected")
+
+// Upload the Backr DAR
+val darPath = "/canton/dars/backr-0.1.0.dar"
+logger.info(s"Uploading DAR: $darPath")
+
+participants.backr.dars.upload(darPath)
+
+logger.info("DAR uploaded successfully")
+
+// Allocate initial parties
+logger.info("Allocating parties...")
+
+val operatorParty = participants.backr.parties.enable("Operator")
+val dsoParty = participants.backr.parties.enable("DSO")
+
+logger.info(s"Operator party: $operatorParty")
+logger.info(s"DSO party: $dsoParty")
+
+logger.info("Backr Canton bootstrap complete!")

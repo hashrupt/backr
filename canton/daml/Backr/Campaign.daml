@@ -1,0 +1,68 @@
+-- Backr Campaign Module
+-- Campaign templates for staking/funding campaigns (Phase 2)
+
+module Backr.Campaign where
+
+import Backr.Types
+
+-- Backing campaign - represents a staking or funding campaign
+-- Created by FA via BackrValidatedApplication.CreateCampaign choice
+template BackingCampaign
+  with
+    operator : Party
+    faParty : Party              -- Featured App party (owner)
+    appPartyId : Text
+    appName : Text
+    campaignId : Text
+    campaignType : Text          -- "STAKING" | "FUNDING"
+    goal : Decimal               -- Target amount in Amulets
+    raisedAmount : Decimal       -- Current pledged/locked amount
+    minBacking : Decimal         -- Minimum backing per backer
+    maxBacking : Decimal         -- Maximum backing per backer
+    startsAt : Time
+    endsAt : Time
+    status : CampaignStatus
+  where
+    signatory faParty
+    observer operator
+
+    -- Update campaign goal (only when draft or open with no backings)
+    choice UpdateCampaignGoal : ContractId BackingCampaign
+      with
+        newGoal : Decimal
+      controller faParty
+      do
+        assertMsg "Campaign must be open or draft" (status == CampaignDraft || status == CampaignOpen)
+        assertMsg "Cannot update goal with existing backings" (raisedAmount == 0.0)
+        create this with goal = newGoal
+
+    -- Open a draft campaign
+    choice OpenCampaign : ContractId BackingCampaign
+      controller faParty
+      do
+        assertMsg "Campaign must be draft" (status == CampaignDraft)
+        create this with status = CampaignOpen
+
+    -- Close campaign (mark as funded)
+    choice CloseCampaign : ContractId BackingCampaign
+      controller faParty
+      do
+        assertMsg "Campaign must be open or selecting" (status == CampaignOpen || status == CampaignSelecting)
+        create this with status = CampaignClosed
+
+    -- Cancel campaign
+    choice CancelCampaign : ContractId BackingCampaign
+      with
+        reason : Text
+      controller faParty, operator
+      do
+        assertMsg "Campaign must not be funded or closed" (status /= CampaignFunded && status /= CampaignClosed)
+        create this with status = CampaignCancelled
+
+    -- Internal: Update raised amount (called via other choices)
+    choice UpdateRaisedAmount : ContractId BackingCampaign
+      with
+        delta : Decimal
+      controller faParty
+      do
+        create this with raisedAmount = raisedAmount + delta

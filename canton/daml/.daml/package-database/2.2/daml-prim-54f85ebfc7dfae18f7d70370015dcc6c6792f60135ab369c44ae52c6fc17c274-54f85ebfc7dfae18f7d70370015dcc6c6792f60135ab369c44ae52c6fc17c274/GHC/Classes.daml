@@ -1,0 +1,45 @@
+{-# LANGUAGE NoDamlSyntax #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoOverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE DatatypeContexts #-}
+{-# OPTIONS_GHC -Wno-unused-imports -Wno-missing-methods -Wno-deprecations -Wno-x-crypto -Wno-x-exceptions #-}
+module GHC.Classes (
+        module GHC.Classes,
+        Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Classes.Eq(..),
+        Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Classes.IP(..),
+        Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Classes.NumericScale(..),
+        Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Classes.Ord(..)
+    ) where
+import CurrentSdk.Data.String
+import Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Classes
+import CurrentSdk.GHC.Err
+import CurrentSdk.GHC.Types
+(||) ::
+  (CurrentSdk.GHC.Types.Bool
+   -> (CurrentSdk.GHC.Types.Bool -> CurrentSdk.GHC.Types.Bool))
+(||) _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+not :: (CurrentSdk.GHC.Types.Bool -> CurrentSdk.GHC.Types.Bool)
+not _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+eqList ::
+  (forall a.
+   ((a -> (a -> CurrentSdk.GHC.Types.Bool))
+    -> (([] a) -> (([] a) -> CurrentSdk.GHC.Types.Bool))))
+eqList _ _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+(&&) ::
+  (CurrentSdk.GHC.Types.Bool
+   -> (CurrentSdk.GHC.Types.Bool -> CurrentSdk.GHC.Types.Bool))
+(&&) _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+infixr 2 ||
+infixr 3 &&

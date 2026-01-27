@@ -1,0 +1,65 @@
+{-# LANGUAGE NoDamlSyntax #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoOverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE DatatypeContexts #-}
+{-# OPTIONS_GHC -Wno-unused-imports -Wno-missing-methods -Wno-deprecations -Wno-x-crypto -Wno-x-exceptions #-}
+module GHC.Enum (
+        module GHC.Enum,
+        Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Enum.Bounded(..),
+        Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Enum.Enum(..)
+    ) where
+import CurrentSdk.Data.String
+import Pkg_590736e6f7bc01492007ecb27f3fe75995c19fbd3d41b384aada69619fd4f76c.GHC.Enum
+import CurrentSdk.GHC.Err
+import CurrentSdk.GHC.Types
+go_up ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int
+       -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int))))
+go_up _ _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+go_dn ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int
+       -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int))))
+go_dn _ _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+eftInt ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int)))
+eftInt _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+efdtIntUp ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int
+       -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int))))
+efdtIntUp _ _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+efdtIntDn ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int
+       -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int))))
+efdtIntDn _ _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+efdtInt ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int
+       -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int))))
+efdtInt _ _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))
+efdInt ::
+  (CurrentSdk.GHC.Types.Int
+   -> (CurrentSdk.GHC.Types.Int -> ([] CurrentSdk.GHC.Types.Int)))
+efdInt _ _
+  = (CurrentSdk.GHC.Err.error
+       (CurrentSdk.Data.String.fromString "data-dependency stub"))

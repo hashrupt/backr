@@ -1,0 +1,195 @@
+-- Backr Application Ownership Allocation Request Module
+-- CIP-56 compatible allocation workflow for application validation fee payment
+
+module Backr.AllocationRequest where
+
+import DA.TextMap as TextMap
+import DA.Optional (fromSome)
+
+import Backr.Types
+import Backr.ValidatedApp (BackrValidatedApplication(..))
+
+-- CIP-56 Token Standard imports
+import Splice.Api.Token.MetadataV1
+import Splice.Api.Token.HoldingV1 (InstrumentId(..), Holding)
+import Splice.Api.Token.AllocationRequestV1
+import Splice.Api.Token.AllocationV1 as Allocation
+import Splice.Api.Token.AllocationInstructionV1
+
+-- Helper function for assertions
+require : CanAssert m => Text -> Bool -> m ()
+require msg invariant =
+  assertMsg ("The requirement '" <> msg <> "' was not met.") invariant
+
+-- Constant for the transfer leg ID
+feePaymentLegId : Text
+feePaymentLegId = "applicationValidationFee"
+
+-- =============================================================================
+-- BackrApplicationOwnershipAllocationRequest
+-- =============================================================================
+-- Implements CIP-56 AllocationRequest interface for atomic fee payment.
+-- Allows FA to allocate Amulets, then Operator to execute transfer.
+
+template BackrApplicationOwnershipAllocationRequest
+  with
+    operator : Party              -- Receiver of fee (signatory via accept)
+    faParty : Party               -- Sender of fee (signatory)
+    appPartyId : Text
+    appName : Text
+    allocationId : Text
+    feeAmount : Decimal
+    instrumentId : InstrumentId
+    holdingContractId : Text
+    prepareUntil : Time
+    settleBefore : Time
+    requestedAt : Time
+    status : AllocationStatus
+  where
+    signatory faParty, operator
+
+    -- ==========================================================================
+    -- CIP-56 ATOMIC TOKEN TRANSFER CHOICES
+    -- ==========================================================================
+
+    -- FA allocates funds via CIP-56 AllocationFactory
+    nonconsuming choice AllocateFunds : ContractId Allocation.Allocation
+      with
+        allocationFactoryCid : ContractId AllocationFactory
+          -- ^ The AllocationFactory contract from the registry (e.g., Amulet)
+        expectedAdmin : Party
+          -- ^ Expected admin party for validation (e.g., DSO party for Amulet)
+        inputHoldingCids : [ContractId Holding]
+          -- ^ The holdings to allocate for payment
+        allocationRequestedAt : Time
+          -- ^ When the allocation was requested
+        extraArgs : ExtraArgs
+          -- ^ Extra arguments for the allocation (registry-specific)
+      controller faParty
+      do
+        assertMsg "Allocation must be pending" (status == AllocationPending)
+        assertMsg "Must be within allocation deadline" (allocationRequestedAt < prepareUntil)
+
+        -- Create allocation specification from the AllocationRequest view
+        let allocationRequestView = view $ toInterface @AllocationRequest this
+        let transferLeg = fromSome $ TextMap.lookup feePaymentLegId allocationRequestView.transferLegs
+        let allocationSpec = Allocation.AllocationSpecification with
+              settlement = allocationRequestView.settlement
+              transferLegId = feePaymentLegId
+              transferLeg = transferLeg
+
+        -- Call AllocationFactory to create the allocation (locks FA's tokens)
+        result <- exercise allocationFactoryCid AllocationFactory_Allocate with
+          expectedAdmin = expectedAdmin
+          allocation = allocationSpec
+          requestedAt = allocationRequestedAt
+          inputHoldingCids = inputHoldingCids
+          extraArgs = extraArgs
+
+        -- Extract allocation CID from the result
+        let allocationCid = case result.output of
+              AllocationInstructionResult_Completed{allocationCid = allocCid} -> allocCid
+              AllocationInstructionResult_Pending{..} -> error "Allocation is pending - not yet completed"
+              AllocationInstructionResult_Failed -> error "Allocation failed"
+
+        pure allocationCid
+
+    -- Operator executes transfer and creates validated app contract
+    postconsuming choice ExecuteTransfer : ContractId BackrValidatedApplication
+      with
+        allocationCid : ContractId Allocation.Allocation
+          -- ^ The Allocation contract created by AllocateFunds
+        extraArgs : ExtraArgs
+          -- ^ Extra arguments for the transfer (registry-specific, e.g., disclosed contracts)
+      controller operator
+      do
+        assertMsg "Allocation must be pending" (status == AllocationPending)
+
+        -- Fetch and validate the allocation matches this fee request
+        alloc <- fetch @Allocation.Allocation allocationCid
+        let allocView = view @Allocation.Allocation alloc
+        let thisView = view $ toInterface @AllocationRequest this
+        let expectedTransferLeg = fromSome $ TextMap.lookup feePaymentLegId thisView.transferLegs
+
+        -- Validate allocation is for this fee payment request
+        assertMsg "Transfer leg ID mismatch" (allocView.allocation.transferLegId == feePaymentLegId)
+        assertMsg "Transfer leg mismatch" (allocView.allocation.transferLeg == expectedTransferLeg)
+        assertMsg "Settlement mismatch" (allocView.allocation.settlement == thisView.settlement)
+
+        -- Execute the atomic token transfer (CIP-56)
+        -- This moves tokens from FA to operator in a single atomic transaction
+        exercise allocationCid (Allocation.Allocation_ExecuteTransfer extraArgs)
+
+        -- Create the validated application contract (gate for campaigns)
+        now <- getTime
+        create BackrValidatedApplication with
+          operator
+          faParty
+          appPartyId
+          appName
+          metadata = None
+          validatedAt = now
+          isActive = True
+
+    -- FA can withdraw before settlement
+    choice WithdrawAllocation : ()
+      controller faParty
+      do
+        assertMsg "Allocation must be pending" (status == AllocationPending)
+        return ()
+
+    -- Operator can expire allocation after deadline
+    choice ExpireAllocation : ContractId BackrApplicationOwnershipAllocationRequest
+      controller operator
+      do
+        assertMsg "Allocation must be pending" (status == AllocationPending)
+        create this with status = AllocationExpired
+
+    -- ==========================================================================
+    -- CIP-56 AllocationRequest Interface Implementation
+    -- ==========================================================================
+    interface instance AllocationRequest for BackrApplicationOwnershipAllocationRequest where
+      view =
+        let
+          derivedDescription = "Backr App Validation Fee: " <> appName
+          meta = Metadata with
+            values = TextMap.fromList [
+              ("splice.lfdecentralizedtrust.org/reason", derivedDescription)
+              -- App-specific metadata as per CIP-56
+              ,("Backr.appPartyId", appPartyId)
+              ,("Backr.appName", appName)
+              ,("Backr.allocationId", allocationId)
+              ]
+        in
+          AllocationRequestView
+            with
+              settlement =
+                SettlementInfo
+                  with
+                    executor = operator  -- Operator is the executor
+                    requestedAt = requestedAt
+                    allocateBefore = prepareUntil
+                    settleBefore = settleBefore
+                    settlementRef =
+                      Reference
+                        with
+                          id = allocationId
+                          cid = None
+                    meta = meta
+              transferLegs = TextMap.fromList
+                [(feePaymentLegId, Allocation.TransferLeg
+                    with
+                      sender = faParty       -- FA pays the fee
+                      receiver = operator    -- Operator receives the fee
+                      amount = feeAmount
+                      instrumentId = instrumentId
+                      meta = meta)
+                ]
+              meta = meta
+
+      allocationRequest_RejectImpl _ AllocationRequest_Reject{..} = do
+        require "Actor must be the FA (sender)" (actor == faParty)
+        pure ChoiceExecutionMetadata with meta = emptyMetadata
+
+      allocationRequest_WithdrawImpl _ _ =
+        pure ChoiceExecutionMetadata with meta = emptyMetadata

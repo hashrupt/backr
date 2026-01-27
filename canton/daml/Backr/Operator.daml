@@ -1,0 +1,76 @@
+-- Backr Operator Contract
+-- The operator is the Backr platform that facilitates staking/funding campaigns
+
+module Backr.Operator where
+
+import Backr.FeeRequest (ValidateApplicationOwnershipFeeRequest(..))
+import Splice.Api.Token.HoldingV1 (InstrumentId(..))
+
+-- Operator contract - singleton per Backr deployment
+template Operator
+  with
+    operator : Party
+    dsoParty : Text                -- DSO party ID stored as Text (for InstrumentId reference)
+    defaultFeeAmount : Decimal     -- Default fee for app validation (e.g., 25.0)
+    amuletInstrumentId : InstrumentId  -- CIP-56 Amulet instrument
+  where
+    signatory operator
+
+    -- Invite a Featured App to validate ownership (pay fee)
+    nonconsuming choice InviteAppForValidation : ContractId ValidateApplicationOwnershipFeeRequest
+      with
+        faParty : Party            -- Featured App party
+        appPartyId : Text          -- Canton partyId of the FA
+        appName : Text             -- Display name
+        feeAmount : Optional Decimal  -- Override default fee
+        prepareUntil : Time        -- Deadline to allocate funds
+        settleBefore : Time        -- Deadline for operator to settle
+      controller operator
+      do
+        now <- getTime
+        let actualFee = case feeAmount of
+              Some f -> f
+              None -> defaultFeeAmount
+        create ValidateApplicationOwnershipFeeRequest with
+          operator
+          faParty
+          appPartyId
+          appName
+          feeAmount = actualFee
+          instrumentId = amuletInstrumentId
+          prepareUntil
+          settleBefore
+          createdAt = now
+
+    -- Update default fee configuration
+    choice UpdateFeeConfig : ContractId Operator
+      with
+        newFeeAmount : Decimal
+        newInstrumentId : InstrumentId
+      controller operator
+      do
+        create this with
+          defaultFeeAmount = newFeeAmount
+          amuletInstrumentId = newInstrumentId
+
+-- Operator invite - used to set up the operator
+-- Note: In production, this might be created by a governance process
+template OperatorInvite
+  with
+    creator : Party              -- Party creating the invite
+    dsoParty : Text              -- DSO party ID as Text
+    defaultFeeAmount : Decimal
+    amuletInstrumentId : InstrumentId
+  where
+    signatory creator
+
+    choice AcceptOperatorInvite : ContractId Operator
+      with
+        operator : Party
+      controller operator
+      do
+        create Operator with
+          operator
+          dsoParty
+          defaultFeeAmount
+          amuletInstrumentId

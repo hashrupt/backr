@@ -1,0 +1,61 @@
+-- Backr Fee Request Module
+-- ValidateApplicationOwnershipFeeRequest template
+
+module Backr.FeeRequest where
+
+import Backr.Types
+import Backr.AllocationRequest (BackrApplicationOwnershipAllocationRequest(..))
+import Splice.Api.Token.HoldingV1 (InstrumentId(..))
+
+-- =============================================================================
+-- ValidateApplicationOwnershipFeeRequest
+-- =============================================================================
+-- Created by Operator to invite an FA to pay the validation fee.
+-- FA as observer can see the request and exercise choices.
+
+template ValidateApplicationOwnershipFeeRequest
+  with
+    operator : Party              -- Backr operator (signatory)
+    faParty : Party               -- Featured App party (observer)
+    appPartyId : Text             -- Canton partyId of the FA
+    appName : Text                -- Display name
+    feeAmount : Decimal           -- Fee amount (e.g., 25.0 Amulets)
+    instrumentId : InstrumentId   -- CIP-56 instrument (Amulet)
+    prepareUntil : Time           -- Deadline to allocate funds
+    settleBefore : Time           -- Deadline for operator to settle
+    createdAt : Time
+  where
+    signatory operator
+    observer faParty
+
+    -- FA accepts and creates allocation request
+    choice ValidateNAcceptAppOwnershipFee : ContractId BackrApplicationOwnershipAllocationRequest
+      with
+        allocationId : Text       -- Unique ID for this allocation
+        holdingContractId : Text  -- Reference to FA's holding contract
+      controller faParty
+      do
+        now <- getTime
+        create BackrApplicationOwnershipAllocationRequest with
+          operator
+          faParty
+          appPartyId
+          appName
+          allocationId
+          feeAmount
+          instrumentId
+          holdingContractId
+          prepareUntil
+          settleBefore
+          requestedAt = now
+          status = AllocationPending
+
+    -- FA can reject the fee request
+    choice RejectFeeRequest : ()
+      controller faParty
+      do return ()
+
+    -- Operator can cancel/expire the request
+    choice CancelFeeRequest : ()
+      controller operator
+      do return ()

@@ -47,46 +47,50 @@ export interface CantonHealthStatus {
 // ============================================================================
 
 export const TEMPLATE_IDS = {
-  // Entity contracts
-  Entity: "Backr.Entity:Entity",
-  EntityClaim: "Backr.Entity:EntityClaim",
+  // Operator contracts
+  Operator: "Backr.Operator:Operator",
+  OperatorInvite: "Backr.Operator:OperatorInvite",
+
+  // App validation contracts
+  FeeRequest: "Backr.FeeRequest:ValidateApplicationOwnershipFeeRequest",
+  AllocationRequest:
+    "Backr.AllocationRequest:BackrApplicationOwnershipAllocationRequest",
+  ValidatedApp: "Backr.ValidatedApp:BackrValidatedApplication",
 
   // Campaign contracts
-  Campaign: "Backr.Campaign:Campaign",
-  CampaignDraft: "Backr.Campaign:CampaignDraft",
-
-  // Interest/Backing contracts
-  Interest: "Backr.Interest:Interest",
-  Backing: "Backr.Backing:Backing",
-  BackingLock: "Backr.Backing:BackingLock",
-
-  // Invite contracts
-  CampaignInvite: "Backr.Invite:CampaignInvite",
+  Campaign: "Backr.Campaign:BackingCampaign",
 };
 
 export const CHOICES = {
-  Entity: {
-    ClaimEntity: "ClaimEntity",
-    UpdateEntity: "UpdateEntity",
+  Operator: {
+    InviteAppForValidation: "InviteAppForValidation",
+    UpdateFeeConfig: "UpdateFeeConfig",
+  },
+  OperatorInvite: {
+    AcceptOperatorInvite: "AcceptOperatorInvite",
+  },
+  FeeRequest: {
+    ValidateNAcceptAppOwnershipFee: "ValidateNAcceptAppOwnershipFee",
+    RejectFeeRequest: "RejectFeeRequest",
+    CancelFeeRequest: "CancelFeeRequest",
+  },
+  AllocationRequest: {
+    AllocateFunds: "AllocateFunds",
+    ExecuteTransfer: "ExecuteTransfer",
+    WithdrawAllocation: "WithdrawAllocation",
+    ExpireAllocation: "ExpireAllocation",
+  },
+  ValidatedApp: {
+    UpdateAppMetadata: "UpdateAppMetadata",
+    CreateCampaign: "CreateCampaign",
+    DeactivateApp: "DeactivateApp",
+    ReactivateApp: "ReactivateApp",
   },
   Campaign: {
-    Publish: "Publish",
-    Close: "Close",
-    RegisterInterest: "RegisterInterest",
-  },
-  Interest: {
-    Accept: "Accept",
-    Decline: "Decline",
-    Withdraw: "Withdraw",
-    CompleteBacking: "CompleteBacking",
-  },
-  Backing: {
-    RequestUnlock: "RequestUnlock",
-    ExecuteWithdraw: "ExecuteWithdraw",
-  },
-  CampaignInvite: {
-    AcceptInvite: "AcceptInvite",
-    DeclineInvite: "DeclineInvite",
+    UpdateCampaignGoal: "UpdateCampaignGoal",
+    OpenCampaign: "OpenCampaign",
+    CloseCampaign: "CloseCampaign",
+    CancelCampaign: "CancelCampaign",
   },
 };
 
