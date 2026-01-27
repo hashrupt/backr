@@ -247,6 +247,7 @@ jobs:
             --min-instances=0
             --max-instances=10
             --concurrency=80
+            --add-cloudsql-instances=${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:stride-db
 
       - name: Output service URL
         run: |
