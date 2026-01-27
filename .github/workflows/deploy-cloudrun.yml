@@ -1,0 +1,330 @@
+name: Deploy to Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - devnet
+          - testnet
+          - mainnet
+      services:
+        description: Services to deploy
+        required: true
+        type: choice
+        options:
+          - all
+          - api
+          - web
+        default: all
+      upload_dar:
+        description: Upload DAR to Canton
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: cloudrun-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  build-and-push:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+
+    strategy:
+      matrix:
+        service: ${{ inputs.services == 'all' && fromJSON('["api", "web"]') || fromJSON(format('["{0}"]', inputs.services)) }}
+
+    outputs:
+      api_image: ${{ steps.meta.outputs.api_image }}
+      web_image: ${{ steps.meta.outputs.web_image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Set image tag
+        id: tag
+        run: |
+          TAG="${{ github.sha }}"
+          IMAGE="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/backr/${{ matrix.service }}:${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Load environment-specific build args
+        id: env
+        run: |
+          case "${{ inputs.environment }}" in
+            devnet)
+              echo "api_url=https://api.backr.dev.canton.hashrupt.com" >> "$GITHUB_OUTPUT"
+              echo "keycloak_url=https://iam.validator.dev.canton.hashrupt.com/cloak" >> "$GITHUB_OUTPUT"
+              echo "keycloak_realm=canton-validator-1" >> "$GITHUB_OUTPUT"
+              echo "keycloak_client_id=verity-ui" >> "$GITHUB_OUTPUT"
+              echo "environment_name=DevNet" >> "$GITHUB_OUTPUT"
+              ;;
+            testnet)
+              echo "api_url=https://api.backr.test.canton.hashrupt.com" >> "$GITHUB_OUTPUT"
+              echo "keycloak_url=https://iam.validator.test.canton.hashrupt.com/cloak" >> "$GITHUB_OUTPUT"
+              echo "keycloak_realm=canton-validator-1" >> "$GITHUB_OUTPUT"
+              echo "keycloak_client_id=verity-ui" >> "$GITHUB_OUTPUT"
+              echo "environment_name=TestNet" >> "$GITHUB_OUTPUT"
+              ;;
+            mainnet)
+              echo "api_url=https://api.backr.canton.hashrupt.com" >> "$GITHUB_OUTPUT"
+              echo "keycloak_url=https://iam.validator.canton.hashrupt.com/cloak" >> "$GITHUB_OUTPUT"
+              echo "keycloak_realm=canton-validator-1" >> "$GITHUB_OUTPUT"
+              echo "keycloak_client_id=verity-ui" >> "$GITHUB_OUTPUT"
+              echo "environment_name=MainNet" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Build and push API
+        if: matrix.service == 'api'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./apps/api/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ steps.tag.outputs.image }}
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/backr/api:${{ inputs.environment }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Web
+        if: matrix.service == 'web'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./apps/web/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ steps.tag.outputs.image }}
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/backr/web:${{ inputs.environment }}
+          build-args: |
+            VITE_API_URL=${{ steps.env.outputs.api_url }}
+            VITE_KEYCLOAK_URL=${{ steps.env.outputs.keycloak_url }}
+            VITE_KEYCLOAK_REALM=${{ steps.env.outputs.keycloak_realm }}
+            VITE_KEYCLOAK_CLIENT_ID=${{ steps.env.outputs.keycloak_client_id }}
+            VITE_ENVIRONMENT_NAME=${{ steps.env.outputs.environment_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image reference
+        id: meta
+        run: |
+          echo "${{ matrix.service }}_image=${{ steps.tag.outputs.image }}" >> "$GITHUB_OUTPUT"
+
+  upload-dar:
+    name: Upload DAR to Canton
+    needs: build-and-push
+    if: inputs.upload_dar == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load environment-specific Canton config
+        id: canton
+        run: |
+          case "${{ inputs.environment }}" in
+            devnet)
+              echo "participant_url=https://cantara.validator.dev.canton.hashrupt.com/api/json-api" >> "$GITHUB_OUTPUT"
+              echo "keycloak_url=https://iam.validator.dev.canton.hashrupt.com/cloak" >> "$GITHUB_OUTPUT"
+              ;;
+            testnet)
+              echo "participant_url=https://cantara.validator.test.canton.hashrupt.com/api/json-api" >> "$GITHUB_OUTPUT"
+              echo "keycloak_url=https://iam.validator.test.canton.hashrupt.com/cloak" >> "$GITHUB_OUTPUT"
+              ;;
+            mainnet)
+              echo "participant_url=https://cantara.validator.canton.hashrupt.com/api/json-api" >> "$GITHUB_OUTPUT"
+              echo "keycloak_url=https://iam.validator.canton.hashrupt.com/cloak" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Get Keycloak token
+        id: token
+        run: |
+          TOKEN=$(curl -s -X POST "${{ steps.canton.outputs.keycloak_url }}/realms/canton-validator-1/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${{ secrets.VALIDATOR_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.VALIDATOR_CLIENT_SECRET }}" \
+            -d "grant_type=client_credentials" \
+            -d "scope=openid" | jq -r '.access_token')
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Backr DAR
+        run: |
+          DAR_FILE="canton/dars/backr-0.1.0.dar"
+          if [ -f "$DAR_FILE" ]; then
+            echo "Uploading $DAR_FILE..."
+            curl -s -X POST "${{ steps.canton.outputs.participant_url }}/v2/packages" \
+              -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$DAR_FILE"
+            echo "DAR uploaded successfully"
+          else
+            echo "DAR file not found: $DAR_FILE"
+            exit 1
+          fi
+
+  deploy-api:
+    name: Deploy API to Cloud Run
+    needs: build-and-push
+    if: inputs.services == 'all' || inputs.services == 'api'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: backr-api-${{ inputs.environment }}
+          region: ${{ env.GCP_REGION }}
+          image: ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/backr/api:${{ github.sha }}
+          env_vars: |
+            NODE_ENV=production
+            LOG_LEVEL=info
+            DEFAULT_FEE_AMOUNT=25.0
+          secrets: |
+            DATABASE_URL=backr-${{ inputs.environment }}-db-url:latest
+            CANTON_LEDGER_HOST=backr-${{ inputs.environment }}-canton-host:latest
+            CANTON_LEDGER_PORT=backr-${{ inputs.environment }}-canton-port:latest
+            CANTON_USE_TLS=backr-${{ inputs.environment }}-canton-tls:latest
+            CANTON_LEDGER_BASE_PATH=backr-${{ inputs.environment }}-canton-base-path:latest
+            KEYCLOAK_URL=backr-${{ inputs.environment }}-keycloak-url:latest
+            KEYCLOAK_REALM=backr-${{ inputs.environment }}-keycloak-realm:latest
+            KEYCLOAK_CLIENT_ID=backr-${{ inputs.environment }}-keycloak-client:latest
+            VALIDATOR_HOST=backr-${{ inputs.environment }}-validator-host:latest
+          flags: |
+            --allow-unauthenticated
+            --cpu=1
+            --memory=512Mi
+            --min-instances=0
+            --max-instances=10
+            --concurrency=80
+
+      - name: Output service URL
+        run: |
+          echo "API deployed to: https://backr-api-${{ inputs.environment }}-${{ env.GCP_PROJECT_ID }}.${{ env.GCP_REGION }}.run.app"
+
+  deploy-web:
+    name: Deploy Web to Cloud Run
+    needs: build-and-push
+    if: inputs.services == 'all' || inputs.services == 'web'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: backr-web-${{ inputs.environment }}
+          region: ${{ env.GCP_REGION }}
+          image: ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/backr/web:${{ github.sha }}
+          flags: |
+            --allow-unauthenticated
+            --cpu=1
+            --memory=256Mi
+            --min-instances=0
+            --max-instances=5
+            --concurrency=100
+
+      - name: Output service URL
+        run: |
+          echo "Web deployed to: https://backr-web-${{ inputs.environment }}-${{ env.GCP_PROJECT_ID }}.${{ env.GCP_REGION }}.run.app"
+
+  health-check:
+    name: Health Check
+    needs: [deploy-api, deploy-web]
+    if: always() && (needs.deploy-api.result == 'success' || needs.deploy-web.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Wait for services to stabilize
+        run: sleep 30
+
+      - name: Check API health
+        if: inputs.services == 'all' || inputs.services == 'api'
+        run: |
+          API_URL="https://backr-api-${{ inputs.environment }}-${{ env.GCP_PROJECT_ID }}.${{ env.GCP_REGION }}.run.app"
+          for i in $(seq 1 10); do
+            if curl -sf "$API_URL/health" > /dev/null 2>&1; then
+              echo "API health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/10 - waiting..."
+            sleep 5
+          done
+          echo "API health check failed"
+          exit 1
+
+      - name: Check Web health
+        if: inputs.services == 'all' || inputs.services == 'web'
+        run: |
+          WEB_URL="https://backr-web-${{ inputs.environment }}-${{ env.GCP_PROJECT_ID }}.${{ env.GCP_REGION }}.run.app"
+          for i in $(seq 1 10); do
+            if curl -sf "$WEB_URL" > /dev/null 2>&1; then
+              echo "Web health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/10 - waiting..."
+            sleep 5
+          done
+          echo "Web health check failed"
+          exit 1
