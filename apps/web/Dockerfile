@@ -44,26 +44,16 @@ RUN pnpm --filter @backr/web build
 # ---- Production stage ----
 FROM nginx:1.27-alpine AS production
 
-# Security: run as non-root
-RUN addgroup -g 1001 -S nginx-app && \
-    adduser -S nginx-app -u 1001 -G nginx-app && \
-    chown -R nginx-app:nginx-app /var/cache/nginx && \
-    chown -R nginx-app:nginx-app /var/log/nginx && \
-    touch /var/run/nginx.pid && \
-    chown -R nginx-app:nginx-app /var/run/nginx.pid
-
-# Copy nginx config
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx config template
+COPY apps/web/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Copy built assets
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
+# Cloud Run provides PORT env var (default 8080)
+ENV PORT=8080
 
-EXPOSE 80
+EXPOSE 8080
 
-USER nginx-app
-
+# nginx docker image auto-processes templates with envsubst
 CMD ["nginx", "-g", "daemon off;"]
