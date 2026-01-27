@@ -24,7 +24,7 @@ ENV VITE_SITE_VARIANT=$VITE_SITE_VARIANT
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 
 # Copy workspace root files
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 
